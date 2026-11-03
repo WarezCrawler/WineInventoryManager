@@ -19,7 +19,9 @@ dist/
 *.dump
 
 # Editors / OS
-.vscode/
+.vscode/*
+!.vscode/tasks.json
+!.vscode/settings.json
 .idea/
 Thumbs.db
 
