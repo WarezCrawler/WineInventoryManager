@@ -22,7 +22,7 @@ This repository is public. The business data (customers, invoices, bank details)
 
 ```
 python -m venv .venv
-.venv\Scriptsctivate
+.venv\Scripts\activate
 python -m pip install -r requirements.txt
 python -m winedb
 ```
