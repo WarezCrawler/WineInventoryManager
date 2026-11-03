@@ -30,7 +30,8 @@ Status: **Done** = built, **v1** = planned for the first release, **Later** = ba
 ## 4. Closed invoices
 - 4.1 Reopen a closed invoice: **Later**
 - 4.2 Copy an invoice (new customer, today's date): **Later**
-- 4.3 Create the invoice PDF: **Later**
+- 4.3 Preview an invoice on screen (layout need not match the PDF): **Later**
+- 4.4 Create the invoice PDF directly, without a print step, saved to the PDF folder: **Later**
 
 ## 5. Customers
 - 5.1 Browse the customer table: **Done** (table browser)
