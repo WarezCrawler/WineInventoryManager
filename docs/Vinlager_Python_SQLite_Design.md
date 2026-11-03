@@ -273,6 +273,7 @@ After v1 is stable: the data model clean-up (foreign keys, lookup tables, normal
 | 8 | Invoice date and `is_closed` workflow on close (Access has no extra step) | Same as Access |
 | 9 | "No value" in lookup columns is stored by Access as `0` (`invoices.customer_id` 4 rows, `invoice_lines.warehouse_id` 2 rows in the snapshot) and as NULL (`invoices.warehouse_id` 3 rows). The loader keeps both as they are. Convert 0 to NULL in one explicit, reported step after the load, so NULL is the only "none"? | Keep as loaded; decide before first release |
 | 10 | Access creates the invoice first and assigns the customer afterwards (hence customer 0). The new app may change this process (pick the customer when creating the invoice) | Same as Access in v1; redesign later |
+| 11 | **Decided: rows are never deleted, only soft deleted** (a flag; the row stays). Today only `invoices.is_deleted` exists. Which other tables get an `is_deleted` flag (invoice lines, stock movements, customers, wines, prices...), and which reads and calculations (open-invoice list, on-hand stock, invoice totals) exclude flagged rows? | Add the flag to every table a user can delete from; exclude flagged rows everywhere except audit views |
 
 Risks:
 - **Rounding:** VBA `Round` rounds half to even; Python's `round` does too and matched all 665 lines, but keep the golden test, since a switch to `Decimal` or another rounding rule would break it silently.
