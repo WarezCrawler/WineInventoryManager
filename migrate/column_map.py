@@ -1,6 +1,19 @@
 """Access (Danish) -> SQLite (English) column names. Single source of truth for the
-schema DDL and the data migration. Table names are unchanged in v1.
-Values are never renamed or translated, only column names."""
+schema DDL and the data migration. COLUMN_MAP is keyed by the Access (source) table name;
+TABLE_MAP gives the SQLite table name (migration 001). Access tSettings is not a database table:
+it becomes settings.json (SETTINGS_KEYS).
+Values are never renamed or translated, only table and column names."""
+
+TABLE_MAP = {
+    "tLagre": "warehouses",
+    "tKunder": "customers",
+    "tVinliste": "items",
+    "tFaktura": "invoice_header",
+    "tVinlager_Salg": "invoice_lines",
+    "tVinlager": "stock_transactions",
+    "tPrisliste_Cost": "prices_cost",
+    "tPrisliste_Salg": "prices_sales",
+}
 
 COLUMN_MAP = {
     "tLagre": {
@@ -23,14 +36,14 @@ COLUMN_MAP = {
         "Kommentar": "comment",
     },
     "tVinliste": {
-        "Vin_ID": "wine_id",
-        "Vin_UID": "wine_code",
+        "Vin_ID": "item_id",
+        "Vin_UID": "item_code",
         "Vin_Navn": "name",
         "Vin_Årgang": "vintage",
         "Vin_Land": "country",
         "Vin_Hus": "producer",
         "Vin_Område": "region",
-        "Vin_Type": "wine_type",
+        "Vin_Type": "item_type",
         "Vin_Str": "bottle_size",
         "Vin_Udløb": "drink_by_year",
         "Vin_Moden": "mature_year",
@@ -51,14 +64,14 @@ COLUMN_MAP = {
     "tVinlager": {
         "VinLager_ID": "stock_line_id",
         "Date_Create": "created_at",
-        "Vin_ID": "wine_id",
+        "Vin_ID": "item_id",
         "Quantity": "quantity",
         "Kommentar": "comment",
         "Lager_ID": "warehouse_id",
     },
     "tVinlager_Salg": {
         "Vin_SalgID": "sales_line_id",
-        "Vin_ID": "wine_id",
+        "Vin_ID": "item_id",
         "Date_Create": "created_at",
         "Quantity": "quantity",
         "Kommentar": "comment",
@@ -75,21 +88,41 @@ COLUMN_MAP = {
     },
     "tPrisliste_Cost": {
         "Id": "cost_price_id",
-        "Vin_ID": "wine_id",
+        "Vin_ID": "item_id",
         "PrisType": "price_type",
         "CostPris": "cost_price",
         "test_slet": "test_delete",             # unused leftover, kept 1:1
     },
     "tPrisliste_Salg": {
         "Id": "sales_price_id",
-        "Vin_ID": "wine_id",
+        "Vin_ID": "item_id",
         "PrisType": "price_type",
         "SalgsPris": "sales_price",
         "Momssats": "vat_rate",
     },
-    "tSettings": {
-        "Setting": "setting_key",
-        "Value": "setting_value",
-        "Description": "description",
-    },
+}
+
+
+# Access columns of type Single (4 bytes). A reader that widens them to 8 bytes shows e.g.
+# 120.75749969482422 where Access exports 120.7575, so these (and only these) are shortened to the
+# shortest decimal that gives the same 4-byte value. Source: export/schema.txt. All other numeric
+# columns are Double (or integers) and are used as read.
+SINGLE_COLUMNS = {
+    ("tPrisliste_Cost", "CostPris"),
+    ("tPrisliste_Salg", "SalgsPris"),
+    ("tPrisliste_Salg", "Momssats"),
+    ("tVinlager_Salg", "Momssats"),
+}
+
+
+# Access tSettings (Setting, Value, Description) -> settings.json (app configuration, not data).
+# The Danish Description column is documentation and is not carried over. The three invoice texts are
+# defaults for new invoices; the plan is to copy them onto each invoice record in migration 002.
+SETTINGS_SOURCE = "tSettings"
+SETTINGS_COLUMNS = ["Setting", "Value", "Description"]
+SETTINGS_KEYS = {
+    "<fakt_adr>": "invoice_address",
+    "<fakt_bank_opl>": "invoice_bank_details",
+    "<fakt_betaling_bet>": "invoice_payment_terms",
+    "<fakt_savelocation>": "invoice_pdf_folder",   # machine-specific folder for the PDF files
 }
