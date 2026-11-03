@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+
+# Secrets and local config
+.env
+
+# Personal / business data (customers, bank details): never commit
+*.accdb
+*.laccdb
+*.csv
+*.sql.gz
+*.dump
+
+# Editors / OS
+.vscode/
+.idea/
+Thumbs.db
+
+# Local database files (created on first start)
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+data/
