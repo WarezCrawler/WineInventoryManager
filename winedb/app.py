@@ -1,5 +1,6 @@
 """Table browser: start with `python -m winedb`, then open each table in the browser."""
 import argparse
+import sys
 
 from nicegui import ui
 
@@ -54,10 +55,25 @@ def table_page(name: str | None = None):
     table.bind_filter_from(filter_box, "value")
 
 
+def _fail(message: str) -> None:
+    """The packaged program has no console, so a startup problem is shown in a message box."""
+    print(message, file=sys.stderr)
+    if sys.platform == "win32":
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(None, message, "Wine Inventory Manager", 0x10)
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="winedb", description="Browse the wine inventory tables.")
-    parser.add_argument("--port", type=int, default=8080)
-    parser.add_argument("--no-browser", action="store_true", help="do not open the browser")
+    parser.add_argument("--mode", choices=["window", "browser", "server"], default="window",
+                        help="window = own program window (default), browser = open in the browser, server = no UI opened")
+    parser.add_argument("--port", type=int, default=8080, help="port for browser/server mode")
     args = parser.parse_args(argv)
-    connect().close()  # create or upgrade the database before serving, so a problem shows up here
-    ui.run(host="127.0.0.1", port=args.port, title="Wine Inventory Manager", reload=False, show=not args.no_browser)
+    try:
+        connect().close()  # create or upgrade the database before showing anything
+    except Exception as e:
+        _fail(f"Could not open the database:\n{db_path()}\n\n{e}")
+        raise SystemExit(1)
+    window = args.mode == "window"
+    ui.run(host="127.0.0.1", port=None if window else args.port, title="Wine Inventory Manager", reload=False,
+           native=window, window_size=(1280, 800) if window else None, show=args.mode == "browser")

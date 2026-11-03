@@ -1,5 +1,13 @@
 import os
+import sys
 from pathlib import Path
+
+
+def app_dir() -> Path:
+    """Folder the data lives next to: the .exe's folder when packaged, the project folder otherwise."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent.parent
 
 
 def db_path() -> Path:
@@ -7,4 +15,4 @@ def db_path() -> Path:
     env = os.environ.get("WINE_DB_PATH")
     if env:
         return Path(env)
-    return Path(__file__).resolve().parent.parent / "data" / "wine_inventory.db"
+    return app_dir() / "data" / "wine_inventory.db"
