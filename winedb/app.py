@@ -6,7 +6,7 @@ from nicegui import app, run, ui
 
 from migrate.import_accdb import import_accdb
 from winedb.browse import table_counts, table_view
-from winedb.config import db_path
+from winedb.config import app_dir, db_path
 from winedb.db import connect
 
 
@@ -27,7 +27,7 @@ async def _browse(path_input) -> None:
     try:
         import webview
         window = app.native.main_window
-        files = await window.create_file_dialog(webview.FileDialog.OPEN, file_types=("Access database (*.accdb;*.mdb)", "All files (*.*)"))
+        files = await window.create_file_dialog(webview.FileDialog.OPEN, directory=str(app_dir()), file_types=("Access database (*.accdb;*.mdb)", "All files (*.*)"))
     except Exception:
         ui.notify("The file dialog is only available in the program window. Type or paste the path instead.")
         return
