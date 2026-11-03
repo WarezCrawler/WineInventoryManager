@@ -122,7 +122,7 @@ def check_autoincrement(db_file) -> Result:
     for table in TABLE_MAP.values():
         pk = next((r[1] for r in mem.execute(f'PRAGMA table_info("{table}")') if r[5] == 1 and r[2].upper() == "INTEGER"), None)
         if pk is None:
-            continue  # settings: text key
+            continue  # app_settings: text key
         top = mem.execute(f'SELECT COALESCE(MAX("{pk}"), 0) FROM "{table}"').fetchone()[0]
         try:
             cols = [r[1] for r in mem.execute(f'PRAGMA table_info("{table}")') if r[3] and r[1] != pk]
@@ -150,61 +150,61 @@ def check_data_quality(conn) -> list[Result]:
     q = lambda sql: [tuple(r) for r in conn.execute(sql)]
     out = [
         _review("invoices with a customer not in customers", conn,
-                "SELECT invoice_id, customer_id FROM invoices WHERE customer_id NOT IN (SELECT customer_id FROM customers) ORDER BY 1",
-                "invoices", lambda r: f"invoice {r[0]}: customer_id {r[1]}"),
+                "SELECT invoice_id, customer_id FROM invoice_header WHERE customer_id NOT IN (SELECT customer_id FROM customers) ORDER BY 1",
+                "invoice_header", lambda r: f"invoice {r[0]}: customer_id {r[1]}"),
         _review("invoices without warehouse", conn,
-                "SELECT invoice_id FROM invoices WHERE warehouse_id IS NULL ORDER BY 1", "invoices", lambda r: f"invoice {r[0]}"),
+                "SELECT invoice_id FROM invoice_header WHERE warehouse_id IS NULL ORDER BY 1", "invoice_header", lambda r: f"invoice {r[0]}"),
         _review("invoices without date", conn,
-                "SELECT invoice_id FROM invoices WHERE invoice_date IS NULL ORDER BY 1", "invoices", lambda r: f"invoice {r[0]}"),
+                "SELECT invoice_id FROM invoice_header WHERE invoice_date IS NULL ORDER BY 1", "invoice_header", lambda r: f"invoice {r[0]}"),
         _review("invoices without lines", conn,
-                "SELECT invoice_id FROM invoices WHERE invoice_id NOT IN (SELECT invoice_id FROM invoice_lines) ORDER BY 1",
-                "invoices", lambda r: f"invoice {r[0]}"),
+                "SELECT invoice_id FROM invoice_header WHERE invoice_id NOT IN (SELECT invoice_id FROM invoice_lines) ORDER BY 1",
+                "invoice_header", lambda r: f"invoice {r[0]}"),
         _review("invoice lines without invoice", conn,
-                "SELECT sales_line_id FROM invoice_lines WHERE invoice_id NOT IN (SELECT invoice_id FROM invoices) ORDER BY 1",
+                "SELECT sales_line_id FROM invoice_lines WHERE invoice_id NOT IN (SELECT invoice_id FROM invoice_header) ORDER BY 1",
                 "lines", lambda r: f"line {r[0]}"),
         _review("invoice lines without wine", conn,
-                "SELECT sales_line_id FROM invoice_lines WHERE wine_id NOT IN (SELECT wine_id FROM wines) ORDER BY 1",
+                "SELECT sales_line_id FROM invoice_lines WHERE wine_id NOT IN (SELECT wine_id FROM items) ORDER BY 1",
                 "lines", lambda r: f"line {r[0]}"),
         _review("stock movements without wine", conn,
-                "SELECT stock_line_id FROM stock_movements WHERE wine_id NOT IN (SELECT wine_id FROM wines) ORDER BY 1",
+                "SELECT stock_line_id FROM stock_transactions WHERE wine_id NOT IN (SELECT wine_id FROM items) ORDER BY 1",
                 "rows", lambda r: f"row {r[0]}"),
         _review("rows with a warehouse not in warehouses", conn,
                 """SELECT 'invoice_lines', sales_line_id FROM invoice_lines WHERE warehouse_id NOT IN (SELECT warehouse_id FROM warehouses)
-                   UNION ALL SELECT 'stock_movements', stock_line_id FROM stock_movements WHERE warehouse_id NOT IN (SELECT warehouse_id FROM warehouses)
-                   UNION ALL SELECT 'invoices', invoice_id FROM invoices WHERE warehouse_id IS NOT NULL AND warehouse_id NOT IN (SELECT warehouse_id FROM warehouses)""",
+                   UNION ALL SELECT 'stock_transactions', stock_line_id FROM stock_transactions WHERE warehouse_id NOT IN (SELECT warehouse_id FROM warehouses)
+                   UNION ALL SELECT 'invoice_header', invoice_id FROM invoice_header WHERE warehouse_id IS NOT NULL AND warehouse_id NOT IN (SELECT warehouse_id FROM warehouses)""",
                 "rows", lambda r: f"{r[0]} {r[1]}"),
         _review("price rows without wine", conn,
-                """SELECT 'cost_prices', cost_price_id FROM cost_prices WHERE wine_id NOT IN (SELECT wine_id FROM wines)
-                   UNION ALL SELECT 'sales_prices', sales_price_id FROM sales_prices WHERE wine_id NOT IN (SELECT wine_id FROM wines)""",
+                """SELECT 'prices_cost', cost_price_id FROM prices_cost WHERE wine_id NOT IN (SELECT wine_id FROM items)
+                   UNION ALL SELECT 'prices_sales', sales_price_id FROM prices_sales WHERE wine_id NOT IN (SELECT wine_id FROM items)""",
                 "rows", lambda r: f"{r[0]} {r[1]}"),
         _review("invoice lines with quantity empty or <= 0", conn,
                 "SELECT sales_line_id, quantity FROM invoice_lines WHERE quantity IS NULL OR quantity <= 0 ORDER BY 1", "lines", lambda r: f"line {r[0]}: quantity {r[1]}"),
         _review("wines without sales price", conn,
-                "SELECT wine_id FROM wines WHERE wine_id NOT IN (SELECT wine_id FROM sales_prices) ORDER BY 1", "wines", lambda r: f"wine {r[0]}"),
+                "SELECT wine_id FROM items WHERE wine_id NOT IN (SELECT wine_id FROM prices_sales) ORDER BY 1", "items", lambda r: f"wine {r[0]}"),
         _review("wines without cost price", conn,
-                "SELECT wine_id FROM wines WHERE wine_id NOT IN (SELECT wine_id FROM cost_prices) ORDER BY 1", "wines", lambda r: f"wine {r[0]}"),
+                "SELECT wine_id FROM items WHERE wine_id NOT IN (SELECT wine_id FROM prices_cost) ORDER BY 1", "items", lambda r: f"wine {r[0]}"),
         _review("negative stock (wine x warehouse; stock entries probably missing)", conn,
                 """SELECT wine_id, warehouse_id, SUM(q) FROM (
-                     SELECT wine_id, warehouse_id, quantity AS q FROM stock_movements
+                     SELECT wine_id, warehouse_id, quantity AS q FROM stock_transactions
                      UNION ALL SELECT wine_id, warehouse_id, -quantity FROM invoice_lines)
                    GROUP BY wine_id, warehouse_id HAVING SUM(q) < 0 ORDER BY 1, 2""",
                 "combinations", lambda r: f"wine {r[0]} warehouse {r[1]}: {r[2]}"),
         _review("invoices marked deleted", conn,
-                "SELECT invoice_id, is_closed FROM invoices WHERE is_deleted = 1 ORDER BY 1", "invoices",
+                "SELECT invoice_id, is_closed FROM invoice_header WHERE is_deleted = 1 ORDER BY 1", "invoice_header",
                 lambda r: f"invoice {r[0]} (closed={r[1]})"),
     ]
-    totals = q("SELECT (SELECT COUNT(*) FROM invoices WHERE is_closed = 1), (SELECT COUNT(*) FROM invoices WHERE is_closed = 0), "
-               "(SELECT COUNT(*) FROM stock_movements WHERE quantity < 0)")[0]
+    totals = q("SELECT (SELECT COUNT(*) FROM invoice_header WHERE is_closed = 1), (SELECT COUNT(*) FROM invoice_header WHERE is_closed = 0), "
+               "(SELECT COUNT(*) FROM stock_transactions WHERE quantity < 0)")[0]
     out.append(Result("facts", "INFO", f"closed invoices {totals[0]}, open invoices {totals[1]}, negative stock movements {totals[2]}"))
     for label, sql in [
-        ("wine_type", "SELECT wine_type, COUNT(*) FROM wines GROUP BY 1 ORDER BY 1"),
-        ("bottle_size", "SELECT bottle_size, COUNT(*) FROM wines GROUP BY 1 ORDER BY 1"),
-        ("price_type (sales_prices)", "SELECT price_type, COUNT(*) FROM sales_prices GROUP BY 1 ORDER BY 1"),
-        ("price_type (cost_prices)", "SELECT price_type, COUNT(*) FROM cost_prices GROUP BY 1 ORDER BY 1"),
+        ("wine_type", "SELECT wine_type, COUNT(*) FROM items GROUP BY 1 ORDER BY 1"),
+        ("bottle_size", "SELECT bottle_size, COUNT(*) FROM items GROUP BY 1 ORDER BY 1"),
+        ("price_type (prices_sales)", "SELECT price_type, COUNT(*) FROM prices_sales GROUP BY 1 ORDER BY 1"),
+        ("price_type (prices_cost)", "SELECT price_type, COUNT(*) FROM prices_cost GROUP BY 1 ORDER BY 1"),
         ("price_type (invoice_lines)", "SELECT price_type, COUNT(*) FROM invoice_lines GROUP BY 1 ORDER BY 1"),
         ("vat_rate (invoice_lines)", "SELECT vat_rate, COUNT(*) FROM invoice_lines GROUP BY 1 ORDER BY 1"),
-        ("vat_rate (sales_prices)", "SELECT vat_rate, COUNT(*) FROM sales_prices GROUP BY 1 ORDER BY 1"),
-        ("country", "SELECT country, COUNT(*) FROM wines GROUP BY 1 ORDER BY 1"),
+        ("vat_rate (prices_sales)", "SELECT vat_rate, COUNT(*) FROM prices_sales GROUP BY 1 ORDER BY 1"),
+        ("country", "SELECT country, COUNT(*) FROM items GROUP BY 1 ORDER BY 1"),
     ]:
         out.append(Result(f"values of {label}", "INFO", "; ".join(f"{v!r}: {n}" for v, n in q(sql))))
     return out

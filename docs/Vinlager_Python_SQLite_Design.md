@@ -20,7 +20,7 @@ Sources: `export/schema.txt`, `export/code/*.vba.txt`, `export/modules/*`, `expo
 - **All logic in Python:** price/VAT/discount maths, stock on hand, defaults, validation, workflow.
 - **No FKs in v1 on purpose.** Access enforced none, and the data has orphans (4 invoices point to customer 0: ids 6, 54, 59, 108). FKs would block the 1:1 load.
 - **Plain SQL, no ORM.** Python's built-in `sqlite3` with parameterised queries.
-- **UI separated from logic:** the UI only calls functions in `stock.py` / `invoices.py`, so the toolkit can be replaced.
+- **UI separated from logic:** the UI only calls functions in `stock.py` / `invoice_header.py`, so the toolkit can be replaced.
 
 ## 3. Stack (decisions)
 
@@ -35,7 +35,7 @@ Sources: `export/schema.txt`, `export/code/*.vba.txt`, `export/modules/*`, `expo
 ## 4. Data model (1:1 copy)
 
 Type mapping (SQLite): AutoNumber → `INTEGER PRIMARY KEY AUTOINCREMENT` (ids are never reused, and explicit ids can be inserted by the migration); Long/Integer → `INTEGER`; Text and Memo → `TEXT` (the Access length limits are not enforced); Yes/No → `INTEGER` 0/1; Date/Time → `TEXT` in ISO form `YYYY-MM-DD HH:MM:SS` (the exact format of the CSV export, and it sorts correctly); Double and Single → `REAL` (8-byte, so exported values like `120.7575` load unchanged).
-**Tables and columns are renamed to English** (snake_case, ASCII, no reserved words; tables are plural: `wines`, `invoices`, `invoice_lines`, ...; the Access name stays visible in §4.1 and `TABLE_MAP`). Only names change: data values (`Standard`, `Alm`, `Rød`, country names, settings keys like `<fakt_adr>`) are loaded as they are. The full mapping is in §4.1 and in `migrate/column_map.py`, which is the single source of truth for the DDL and the migration module.
+**Tables and columns are renamed to English** (snake_case, ASCII, no reserved words; tables use descriptive English names such as `items`, `invoice_header`, `invoice_lines`; the Access name stays visible in §4.1 and `TABLE_MAP`). Only names change: data values (`Standard`, `Alm`, `Rød`, country names, settings keys like `<fakt_adr>`) are loaded as they are. The full mapping is in §4.1 and in `migrate/column_map.py`, which is the single source of truth for the DDL and the migration module.
 
 ```sql
 CREATE TABLE warehouses (
@@ -49,25 +49,25 @@ CREATE TABLE customers (
   is_hidden INTEGER DEFAULT 0, email TEXT, on_mailing_list INTEGER DEFAULT 0,
   comment TEXT);
 
-CREATE TABLE wines (
+CREATE TABLE items (
   wine_id INTEGER PRIMARY KEY AUTOINCREMENT,
   wine_code TEXT NOT NULL COLLATE NOCASE, name TEXT NOT NULL COLLATE NOCASE, vintage INTEGER NOT NULL,
   country TEXT, producer TEXT, region TEXT,
   wine_type TEXT COLLATE NOCASE, bottle_size TEXT COLLATE NOCASE, drink_by_year INTEGER, mature_year INTEGER,
   is_discontinued INTEGER DEFAULT 0, is_private INTEGER DEFAULT 0, comment TEXT);
-CREATE UNIQUE INDEX wine_code ON wines (wine_code);
+CREATE UNIQUE INDEX wine_code ON items (wine_code);
 
-CREATE TABLE invoices (
+CREATE TABLE invoice_header (
   invoice_id INTEGER PRIMARY KEY AUTOINCREMENT,
   customer_id INTEGER DEFAULT 0, is_closed INTEGER DEFAULT 0, comment TEXT,
   warehouse_id INTEGER, invoice_date TEXT, hide_subtotals INTEGER DEFAULT 0, is_deleted INTEGER DEFAULT 0);
-CREATE INDEX invoices_warehouse_id ON invoices (warehouse_id);
+CREATE INDEX invoice_header_warehouse_id ON invoice_header (warehouse_id);
 
-CREATE TABLE stock_movements (
+CREATE TABLE stock_transactions (
   stock_line_id INTEGER PRIMARY KEY AUTOINCREMENT,
   created_at TEXT, wine_id INTEGER NOT NULL, quantity INTEGER DEFAULT 0, comment TEXT,
   warehouse_id INTEGER NOT NULL);
-CREATE INDEX stock_movements_warehouse_id ON stock_movements (warehouse_id);
+CREATE INDEX stock_transactions_warehouse_id ON stock_transactions (warehouse_id);
 
 CREATE TABLE invoice_lines (
   sales_line_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -78,15 +78,15 @@ CREATE TABLE invoice_lines (
   discount REAL NOT NULL DEFAULT 0);
 CREATE INDEX invoice_lines_warehouse_id ON invoice_lines (warehouse_id);
 
-CREATE TABLE cost_prices (
+CREATE TABLE prices_cost (
   cost_price_id INTEGER PRIMARY KEY AUTOINCREMENT, wine_id INTEGER NOT NULL, price_type TEXT COLLATE NOCASE,
   cost_price REAL, test_delete INTEGER);
 
-CREATE TABLE sales_prices (
+CREATE TABLE prices_sales (
   sales_price_id INTEGER PRIMARY KEY AUTOINCREMENT, wine_id INTEGER NOT NULL, price_type TEXT COLLATE NOCASE,
   sales_price REAL, vat_rate REAL NOT NULL DEFAULT 0.25);
 
-CREATE TABLE settings (
+CREATE TABLE app_settings (
   setting_key TEXT NOT NULL PRIMARY KEY COLLATE NOCASE, setting_value TEXT, description TEXT);
 ```
 
@@ -103,18 +103,18 @@ Machine-readable: `migrate/column_map.py` (`COLUMN_MAP[table][old_name] = new_na
 | | Skjul | is_hidden | hidden from pickers |
 | | Mailadr / Maillist | email / on_mailing_list | |
 | | Kommentar | comment | |
-| tVinliste → `wines` | Vin_ID / Vin_UID | wine_id / wine_code | unique short code |
+| tVinliste → `items` | Vin_ID / Vin_UID | wine_id / wine_code | unique short code |
 | | Vin_Navn / Vin_Årgang | name / vintage | |
 | | Vin_Land / Vin_Hus / Vin_Område | country / producer / region | `Hus` = wine house |
 | | Vin_Type / Vin_Str | wine_type / bottle_size | |
 | | Vin_Udløb / Vin_Moden | drink_by_year / mature_year | |
 | | Udgået / Private | is_discontinued / is_private | |
 | | Vin_Kommentar | comment | |
-| tFaktura → `invoices` | Fakt_ID / Kunde_ID / Lager_ID | invoice_id / customer_id / warehouse_id | |
+| tFaktura → `invoice_header` | Fakt_ID / Kunde_ID / Lager_ID | invoice_id / customer_id / warehouse_id | |
 | | Lukket | is_closed | |
 | | FakturaDato / Kommentar | invoice_date / comment | |
 | | HideSubTotals / Delete | hide_subtotals / is_deleted | `Delete` is a soft delete |
-| tVinlager → `stock_movements` | VinLager_ID | stock_line_id | |
+| tVinlager → `stock_transactions` | VinLager_ID | stock_line_id | |
 | | Date_Create / Vin_ID / Lager_ID | created_at / wine_id / warehouse_id | |
 | | Quantity / Kommentar | quantity / comment | signed |
 | tVinlager_Salg → `invoice_lines` | Vin_SalgID / Fakt_ID | sales_line_id / invoice_id | |
@@ -126,19 +126,19 @@ Machine-readable: `migrate/column_map.py` (`COLUMN_MAP[table][old_name] = new_na
 | | CostPris / SamletCostPris | cost_price / amount_cost | |
 | | Momssats / PrisType | vat_rate / price_type | |
 | | Rabat | discount | VAT-included amount |
-| tPrisliste_Cost → `cost_prices` | Id / Vin_ID | cost_price_id / wine_id | |
+| tPrisliste_Cost → `prices_cost` | Id / Vin_ID | cost_price_id / wine_id | |
 | | PrisType / CostPris | price_type / cost_price | |
 | | test_slet | test_delete | unused, kept 1:1 |
-| tPrisliste_Salg → `sales_prices` | Id / Vin_ID | sales_price_id / wine_id | |
+| tPrisliste_Salg → `prices_sales` | Id / Vin_ID | sales_price_id / wine_id | |
 | | PrisType / SalgsPris / Momssats | price_type / sales_price / vat_rate | |
-| tSettings → `settings` | Setting / Value / Description | setting_key / setting_value / description | |
+| tSettings → `app_settings` | Setting / Value / Description | setting_key / setting_value / description | |
 
-Not migrated: `USysApplicationLog`. Names to note: `stock_movements` (Access `tVinlager`) is the stock movement table (`stock_line_id`) and `invoice_lines` (Access `tVinlager_Salg`) holds invoice sale lines (`sales_line_id`).
+Not migrated: `USysApplicationLog`. Names to note: `stock_transactions` (Access `tVinlager`) is the stock movement table (`stock_line_id`) and `invoice_lines` (Access `tVinlager_Salg`) holds invoice sale lines (`sales_line_id`).
 
 Notes:
 - `USysApplicationLog` (3 rows from a failed 2013 Access data macro) is **not** migrated: it is an Access system artefact.
 - `created_at` has an Access default of `Now()`. Python sets it explicitly on insert (logic stays in Python).
-- `cost_prices.test_delete` is empty in all rows; kept for 1:1.
+- `prices_cost.test_delete` is empty in all rows; kept for 1:1.
 - Access `Required` is kept as `NOT NULL`; Access `Allow zero length` (empty text) has no SQLite equivalent and is not enforced.
 - These statements are the content of the first migration `001_init.sql` (§4.2).
 
@@ -166,22 +166,22 @@ amount_cost     = round(cost_price * quantity, 2)
 `sales_price` is the VAT-inclusive unit price and `discount` is a VAT-inclusive amount off the line. **Verified: this reproduces all 665 historical lines with 0 mismatches** (`scripts/check_rabat.py`). Null values count as 0 (VBA `Nz`).
 
 ### 5.2 Prices on a line
-- **Cost price default** (`GetCostPrisStandard`): `cost_price` of the first `cost_prices` row (lowest `cost_price_id`) for the wine with `price_type = 'Standard'`; `0` if none. The user can also pick another cost row for the wine, or type the value.
-- **Sales price:** the user picks one of the wine's `sales_prices` rows; this copies `sales_price`, `vat_rate` and `price_type` onto the line. Typing a price by hand sets `price_type = ''` (price list selection is cleared) and keeps `vat_rate`.
+- **Cost price default** (`GetCostPrisStandard`): `cost_price` of the first `prices_cost` row (lowest `cost_price_id`) for the wine with `price_type = 'Standard'`; `0` if none. The user can also pick another cost row for the wine, or type the value.
+- **Sales price:** the user picks one of the wine's `prices_sales` rows; this copies `sales_price`, `vat_rate` and `price_type` onto the line. Typing a price by hand sets `price_type = ''` (price list selection is cleared) and keeps `vat_rate`.
 - The line stores a **snapshot** of price, VAT rate and cost; later price list changes never alter existing lines.
 
 ### 5.3 Stock on hand (`TotalVinQ`, view `uVinlager`)
-`on_hand(wine_id, warehouse_id) = SUM(stock_movements.quantity) − SUM(invoice_lines.quantity)`, summed over all rows for that wine and warehouse. Negative `stock_movements.quantity` rows are stock removals/corrections (341 of 863 rows). Computed in Python with two `SUM` queries. No stock guard exists in Access, so none in v1.
+`on_hand(wine_id, warehouse_id) = SUM(stock_transactions.quantity) − SUM(invoice_lines.quantity)`, summed over all rows for that wine and warehouse. Negative `stock_transactions.quantity` rows are stock removals/corrections (341 of 863 rows). Computed in Python with two `SUM` queries. No stock guard exists in Access, so none in v1.
 
 ### 5.4 Invoice rules
-- **Open invoice** = `is_closed = 0`. Lines can be added/edited only on open invoices (the Access line form is bound to `qVinlager_Salg`, which filters `is_closed <> True`). Closing = set `invoices.is_closed = 1`. Re-opening is a separate screen (backlog).
+- **Open invoice** = `is_closed = 0`. Lines can be added/edited only on open invoices (the Access line form is bound to `qVinlager_Salg`, which filters `is_closed <> True`). Closing = set `invoice_header.is_closed = 1`. Re-opening is a separate screen (backlog).
 - **New line defaults:** `invoice_id` = chosen invoice, `warehouse_id` = the invoice's `warehouse_id` (`GetDefaultLagerID`), `created_at` = now, `quantity` 0, `discount` 0. `warehouse_id` is NOT NULL on lines, so if the invoice has no warehouse (3 do), the user must pick one.
 - **Header:** `customer_id` (customer picker: customers with `is_hidden = 0`, ordered by name, plus a "contains" name search), default warehouse `warehouse_id`, `invoice_date`, `comment`, `hide_subtotals`, `is_closed`, `is_deleted`. Customer address, zip, city and phone are shown read-only.
 - **Delete flag (`is_deleted`):** ticking it shows the Access warning *"Be aware that this invoice will be suppressed, and must have zero quantity and amounts"* (Danish original text kept). It is a soft delete; nothing is physically removed. Hidden in the exports (`uVinlager_Excel`).
 - **Invoice number** = `invoice_id` (auto-increment). Python reads the new id from the insert (`lastrowid`); the Access code used `DMax`, which could return another user's invoice number. With SQLite `lastrowid` is exact.
 
 ### 5.5 Stock change rules (`fVinlager_Change`)
-A stock change is an insert into `stock_movements`: `wine_id`, `warehouse_id`, `quantity` (signed, + adds, − removes), `comment`, `created_at` (default now). The form shows the wine's name, vintage, house, country, size, type and the current quantity for the chosen wine and warehouse (`TotalVinQ`). Existing movements are not deleted from this form (deletion disabled in Access).
+A stock change is an insert into `stock_transactions`: `wine_id`, `warehouse_id`, `quantity` (signed, + adds, − removes), `comment`, `created_at` (default now). The form shows the wine's name, vintage, house, country, size, type and the current quantity for the chosen wine and warehouse (`TotalVinQ`). Existing movements are not deleted from this form (deletion disabled in Access).
 
 ## 6. Screens
 
@@ -233,17 +233,17 @@ Each step has an acceptance check; do them in order.
 
 1. **Skeleton.** Repo, venv, `pytest`, NiceGUI; `config.py` (database path). *Check:* `pytest` runs; no database exists yet.
 2. **Schema and first start (§4.2).** `001_init.sql` from §4 and `db.connect()` with create-if-missing and `user_version` handling. *Check:* deleting `data/` and starting the app creates the file with all 9 tables and `user_version = 1`; a second start changes nothing; a database with `user_version = 99` is refused; column names equal `COLUMN_MAP` and the types and nullability match `schema.txt`.
-3. **Data load + reconciliation (`migrate/load_csv.py`).** Read the 9 CSVs (UTF-8 with BOM) from `export/csv/` and rename each header with `COLUMN_MAP` (§4.1; fail if a CSV has a column the map does not know, or the map has one the CSV lacks); booleans `True/False` → 1/0; empty cell → `NULL` (the CSV cannot tell empty from NULL, so text fields lose that distinction; document it); insert with the original ids so keys are preserved; `AUTOINCREMENT` continues after the max id (SQLite keeps it in `sqlite_sequence`; check with a test insert); the target is created through `connect()` and a non-empty target is refused. *Check:* row counts 143 / 176 / 3 / 240 / 442 / 4 / 863 / 665 / 228; Σ `amount_ex_vat` = 326,572.40; max `invoice_id` 150; 129 closed + 14 open invoices; 341 negative `stock_movements` rows. Re-runnable by deleting the target file first.
+3. **Data load + reconciliation (`migrate/load_csv.py`).** Read the 9 CSVs (UTF-8 with BOM) from `export/csv/` and rename each header with `COLUMN_MAP` (§4.1; fail if a CSV has a column the map does not know, or the map has one the CSV lacks); booleans `True/False` → 1/0; empty cell → `NULL` (the CSV cannot tell empty from NULL, so text fields lose that distinction; document it); insert with the original ids so keys are preserved; `AUTOINCREMENT` continues after the max id (SQLite keeps it in `sqlite_sequence`; check with a test insert); the target is created through `connect()` and a non-empty target is refused. *Check:* row counts 143 / 176 / 3 / 240 / 442 / 4 / 863 / 665 / 228; Σ `amount_ex_vat` = 326,572.40; max `invoice_id` 150; 129 closed + 14 open invoices; 341 negative `stock_transactions` rows. Re-runnable by deleting the target file first.
 4. **Logic + golden test.** `logic.line_amounts()` (§5.1) and `stock.on_hand()` (§5.3). *Check:* pytest recomputes all 665 lines from the DB and gets the stored totals (0 mismatches); on-hand for all 283 wine/warehouse combinations matches the CSV-based calculation (15 of them negative, as in the data report).
 5. **UI shell and main menu.** NiceGUI app, menu page with the open-invoice list and buttons (§6.1), disabled backlog buttons. *Check:* the list shows the 14 open invoices (or 10 if the inner join is kept).
-6. **Stock change screen** (§6.2). *Check:* adding +6 and −2 changes on-hand by +4 and writes two `stock_movements` rows with correct `created_at`.
-7. **Invoice header screen** (§5.4, §6.3). *Check:* create, edit, set delete flag, close; the row in `invoices` is as Access would store it.
+6. **Stock change screen** (§6.2). *Check:* adding +6 and −2 changes on-hand by +4 and writes two `stock_transactions` rows with correct `created_at`.
+7. **Invoice header screen** (§5.4, §6.3). *Check:* create, edit, set delete flag, close; the row in `invoice_header` is as Access would store it.
 8. **Invoice lines screen** (§5.2, §6.4). *Check:* re-enter an existing historical invoice (e.g. one with a `discount`, one with 0% VAT, one with negative quantity) and get identical line values; closed invoices are read-only.
 9. **End-to-end and parallel run.** Run on a copy of the migrated database file; enter the same new invoice and stock change in Access and in the new app; compare the stored rows.
 
 ## 9. Backlog (not in v1)
 
-From the Access app, in rough priority: invoice **PDF** (`rFaktura`; spec `export/report_spec/rFaktura.spec.json`, reference PDFs in `export/reference_invoices/`); **re-open closed invoice** (`fFaktura_genåben`); **copy invoice** (`DBCopyFakt`: copies header with new customer, today's date and `is_closed`/`warehouse_id`/`hide_subtotals`; copies lines with date today); **customer maintenance** and **mail list export** (`on_mailing_list = 1 AND is_hidden = 0 AND email <> ''`, 128 eligible); **wine list maintenance** (value lists: type `Rød;Hvid;Rose;Desert;Mousserende`, size `Alm;Halv;Magnum;Db. Mgm;50 cl.`, though the data uses `MGM`/`DMGM`); **price lists** sale/cost; **warehouse** master data; **settings** (`settings`, incl. PDF save folder); **stock report** (`qVinliste`) and **customer list** (`rKundeListe`); **stock import** (`qVinlager_Change_Import`); **Excel export** (`uVinlager_Excel`); **consistency check query**.
+From the Access app, in rough priority: invoice **PDF** (`rFaktura`; spec `export/report_spec/rFaktura.spec.json`, reference PDFs in `export/reference_invoices/`); **re-open closed invoice** (`fFaktura_genåben`); **copy invoice** (`DBCopyFakt`: copies header with new customer, today's date and `is_closed`/`warehouse_id`/`hide_subtotals`; copies lines with date today); **customer maintenance** and **mail list export** (`on_mailing_list = 1 AND is_hidden = 0 AND email <> ''`, 128 eligible); **wine list maintenance** (value lists: type `Rød;Hvid;Rose;Desert;Mousserende`, size `Alm;Halv;Magnum;Db. Mgm;50 cl.`, though the data uses `MGM`/`DMGM`); **price lists** sale/cost; **warehouse** master data; **settings** (`app_settings`, incl. PDF save folder); **stock report** (`qVinliste`) and **customer list** (`rKundeListe`); **stock import** (`qVinlager_Change_Import`); **Excel export** (`uVinlager_Excel`); **consistency check query**.
 
 ### 9.1 Key strategy: identity keys now, business keys later
 
@@ -253,7 +253,7 @@ From the Access app, in rough priority: invoice **PDF** (`rFaktura`; spec `expor
 - **Cheap rules for v1 so the later change stays small:**
   1. Keep `wine_code` unique (it is, `CREATE UNIQUE INDEX`) and show it in wine pickers and lists next to the name.
   2. Resolve a wine from a typed code in **one** function (`find_wine_by_code`), and never hard-code identity values or assume ids are consecutive or meaningful.
-  3. Keep each relation lookup (`wine_id`, `customer_id`, `warehouse_id` joins) in the `stock.py` / `invoices.py` data functions, not in the UI.
+  3. Keep each relation lookup (`wine_id`, `customer_id`, `warehouse_id` joins) in the `stock.py` / `invoice_header.py` data functions, not in the UI.
 - **How the change is made later:** one numbered migration per dimension (§4.2): add the business key column, backfill and check it is unique and not empty, add the unique index, add the new key column to the child tables, fill it by joining on the old id, then rebuild the tables without the old column. The golden tests (§8 step 4) must give identical results before and after.
 - **Open (not for v1):** which dimensions get a key and what it looks like (customer number? warehouse code?); whether the business key should become the primary key itself or stay a unique alternate key; how to handle codes users want to rename after history exists (history must keep pointing at the same wine).
 
@@ -271,14 +271,14 @@ After v1 is stable: the data model clean-up (foreign keys, lookup tables, normal
 | 6 | NULL vs empty string for text fields on load | NULL |
 | 7 | Access `Single` columns stored as 8-byte `REAL` | `REAL` |
 | 8 | Invoice date and `is_closed` workflow on close (Access has no extra step) | Same as Access |
-| 9 | "No value" in lookup columns is stored by Access as `0` (`invoices.customer_id` 4 rows, `invoice_lines.warehouse_id` 2 rows in the snapshot) and as NULL (`invoices.warehouse_id` 3 rows). The loader keeps both as they are. Convert 0 to NULL in one explicit, reported step after the load, so NULL is the only "none"? | Keep as loaded; decide before first release |
+| 9 | "No value" in lookup columns is stored by Access as `0` (`invoice_header.customer_id` 4 rows, `invoice_lines.warehouse_id` 2 rows in the snapshot) and as NULL (`invoice_header.warehouse_id` 3 rows). The loader keeps both as they are. Convert 0 to NULL in one explicit, reported step after the load, so NULL is the only "none"? | Keep as loaded; decide before first release |
 | 10 | Access creates the invoice first and assigns the customer afterwards (hence customer 0). The new app may change this process (pick the customer when creating the invoice) | Same as Access in v1; redesign later |
-| 11 | **Decided: rows are never deleted; if a delete function exists it is a soft delete (a flag; the row stays).** Access could technically delete rows but never offered it in the UI, and only invoices had a flag (`invoices.is_deleted`). So v1 has no delete function except the invoice flag, and no flag columns on other tables. Open: the "Delete line" button in §6.4 (was it in the Access line form? how does a user correct a wrong line?) | Invoice soft delete only; add a flag with a new migration if another delete function is designed |
-| 12 | Invoice output. **Decided:** an on-screen **preview** in the app, which need not look exactly like the PDF. **Proposed:** the PDF is generated directly from the data with ReportLab (pure Python, works in the packaged `.exe`; no printing step), saved to the PDF folder from `settings` and opened in the default viewer. The preview and the PDF use the same line and total calculation (§5.1), so they cannot disagree on amounts. Checked against the reference PDFs in `export/reference_invoices/`. Open: keep the saved PDF when an invoice is later reopened and changed (warn or overwrite)? | ReportLab; generate on request and save a copy named by invoice number |
+| 11 | **Decided: rows are never deleted; if a delete function exists it is a soft delete (a flag; the row stays).** Access could technically delete rows but never offered it in the UI, and only invoices had a flag (`invoice_header.is_deleted`). So v1 has no delete function except the invoice flag, and no flag columns on other tables. Open: the "Delete line" button in §6.4 (was it in the Access line form? how does a user correct a wrong line?) | Invoice soft delete only; add a flag with a new migration if another delete function is designed |
+| 12 | Invoice output. **Decided:** an on-screen **preview** in the app, which need not look exactly like the PDF. **Proposed:** the PDF is generated directly from the data with ReportLab (pure Python, works in the packaged `.exe`; no printing step), saved to the PDF folder from `app_settings` and opened in the default viewer. The preview and the PDF use the same line and total calculation (§5.1), so they cannot disagree on amounts. Checked against the reference PDFs in `export/reference_invoices/`. Open: keep the saved PDF when an invoice is later reopened and changed (warn or overwrite)? | ReportLab; generate on request and save a copy named by invoice number |
 
 Risks:
 - **Rounding:** VBA `Round` rounds half to even; Python's `round` does too and matched all 665 lines, but keep the golden test, since a switch to `Decimal` or another rounding rule would break it silently.
 - **One user at a time:** the SQLite file must be used by a single program instance on a local disk. A second instance gets "database is locked" on write, and the file must not sit in a synced folder (Dropbox, OneDrive) while the app runs, which can corrupt it. Back up by copying the file while the app is closed.
 - **Collation:** `NOCASE` folds ASCII only. `Ø` and `ø` compare as different inside SQL, so Python-side matching is used where Danish letters matter.
-- **Personal and bank data** in the CSVs and `settings`: keep out of any shared repo.
+- **Personal and bank data** in the CSVs and `app_settings`: keep out of any shared repo.
 - **Unverified:** the Access form *display* behaviours (tab order, exact layout) are not reproduced; only data behaviour is specified above.

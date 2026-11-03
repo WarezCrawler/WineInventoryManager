@@ -6,13 +6,13 @@ Values are never renamed or translated, only table and column names."""
 TABLE_MAP = {
     "tLagre": "warehouses",
     "tKunder": "customers",
-    "tVinliste": "wines",
-    "tFaktura": "invoices",
-    "tVinlager": "stock_movements",
+    "tVinliste": "items",
+    "tFaktura": "invoice_header",
     "tVinlager_Salg": "invoice_lines",
-    "tPrisliste_Cost": "cost_prices",
-    "tPrisliste_Salg": "sales_prices",
-    "tSettings": "settings",
+    "tVinlager": "stock_transactions",
+    "tPrisliste_Cost": "prices_cost",
+    "tPrisliste_Salg": "prices_sales",
+    "tSettings": "app_settings",
 }
 
 COLUMN_MAP = {

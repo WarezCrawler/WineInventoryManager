@@ -20,7 +20,7 @@ def test_table_view_returns_columns_rows_and_key(tmp_path):
     assert view["columns"] == ["warehouse_id", "warehouse_name", "comment"]
     assert view["rows"] == [{"warehouse_id": 1, "warehouse_name": "Main", "comment": "c"}]
     assert view["total"] == 1 and view["key"] == "warehouse_id"
-    assert table_view(conn, "settings")["key"] == "setting_key"
+    assert table_view(conn, "app_settings")["key"] == "setting_key"
 
 
 def test_limit_caps_rows_but_not_total(tmp_path):

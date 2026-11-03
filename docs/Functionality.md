@@ -40,7 +40,7 @@ Status: **Done** = built, **v1** = planned for the first release, **Later** = ba
 - 5.4 Mailing list export: **Later**
 
 ## 6. Wines, prices and warehouses
-- 6.1 Browse the tables (wines, prices, warehouses, settings): **Done** (table browser)
+- 6.1 Browse the tables (items, prices, warehouses, app settings): **Done** (table browser)
 - 6.2 Maintain the wine list: **Later**
 - 6.3 Maintain sales and cost prices: **Later**
 - 6.4 Price lists (sales, cost): **Later**

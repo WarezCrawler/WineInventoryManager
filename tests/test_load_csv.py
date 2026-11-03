@@ -64,12 +64,12 @@ def test_verifier_detects_a_tampered_database(tmp_path):
     write_csvs(tmp_path / "csv")
     load(tmp_path / "csv", tmp_path / "w.db")
     conn = sqlite3.connect(tmp_path / "w.db")
-    conn.execute("UPDATE wines SET name = 'Vin A'")  # one character off: æøå damage
+    conn.execute("UPDATE items SET name = 'Vin A'")  # one character off: æøå damage
     conn.execute("UPDATE invoice_lines SET sales_price = 120.76")
     conn.commit()
     failed = {r.name for r in run_all(tmp_path / "csv", tmp_path / "w.db") if r.status == "FAIL"}
-    assert {"cells wines", "cells invoice_lines", "aggregates invoice_lines"} <= failed
-    assert "aggregates wines" not in failed  # same length: only the cell-for-cell check can see it
+    assert {"cells items", "cells invoice_lines", "aggregates invoice_lines"} <= failed
+    assert "aggregates items" not in failed  # same length: only the cell-for-cell check can see it
 
 
 def test_header_mismatch_stops_the_load_and_writes_nothing(tmp_path):
