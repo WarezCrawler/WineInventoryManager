@@ -54,7 +54,7 @@ def test_data_that_breaks_rules_is_loaded_unchanged_and_reported(tmp_path):
     conn = sqlite3.connect(tmp_path / "w.db")
     assert conn.execute("SELECT item_id, quantity, invoice_id, warehouse_id FROM invoice_lines").fetchone() == (99, None, 77, 0)
     results = {r.name: r.status for r in run_all(tmp_path / "csv", tmp_path / "w.db")}
-    assert results["invoice lines without wine"] == "REVIEW"
+    assert results["invoice lines without item"] == "REVIEW"
     assert results["invoice lines without invoice"] == "REVIEW"
     assert results["invoice lines with quantity empty or <= 0"] == "REVIEW"
     assert "FAIL" not in results.values()
