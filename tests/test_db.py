@@ -2,7 +2,7 @@ import sqlite3
 
 import pytest
 
-from migrate.column_map import COLUMN_MAP
+from migrate.column_map import COLUMN_MAP, TABLE_MAP
 from winedb import config
 from winedb.db import SchemaTooNewError, connect, latest_version
 
@@ -22,13 +22,14 @@ def test_first_start_creates_the_database(tmp_path):
     db = tmp_path / "sub" / "wine.db"  # the folder does not exist either
     conn = connect(db)
     assert db.exists()
-    assert tables(conn) == set(COLUMN_MAP)
+    assert tables(conn) == set(TABLE_MAP.values())
     assert conn.execute("PRAGMA user_version").fetchone()[0] == latest_version() >= 1
 
 
 def test_schema_columns_match_column_map(tmp_path):
     conn = connect(tmp_path / "wine.db")
-    for table, mapping in COLUMN_MAP.items():
+    for access_table, mapping in COLUMN_MAP.items():
+        table = TABLE_MAP[access_table]
         cols = [r["name"] for r in conn.execute(f"PRAGMA table_info({table})")]
         assert cols == list(mapping.values()), table
 
@@ -36,10 +37,10 @@ def test_schema_columns_match_column_map(tmp_path):
 def test_second_start_changes_nothing(tmp_path):
     db = tmp_path / "wine.db"
     conn = connect(db)
-    conn.execute("INSERT INTO tLagre (warehouse_name) VALUES ('Main')")
+    conn.execute("INSERT INTO warehouses (warehouse_name) VALUES ('Main')")
     conn.close()
     conn = connect(db)
-    assert conn.execute("SELECT warehouse_name FROM tLagre").fetchone()[0] == "Main"
+    assert conn.execute("SELECT warehouse_name FROM warehouses").fetchone()[0] == "Main"
     assert list(tmp_path.glob("*.bak-*")) == []  # no backup when nothing is upgraded
 
 
@@ -96,9 +97,9 @@ def test_migration_numbering_gap_is_rejected(tmp_path):
 
 def test_wine_code_is_unique_ignoring_case(tmp_path):
     conn = connect(tmp_path / "wine.db")
-    conn.execute("INSERT INTO tVinliste (wine_code, name, vintage) VALUES ('SAbSe_RA10', 'x', 2010)")
+    conn.execute("INSERT INTO wines (wine_code, name, vintage) VALUES ('SAbSe_RA10', 'x', 2010)")
     with pytest.raises(sqlite3.IntegrityError):
-        conn.execute("INSERT INTO tVinliste (wine_code, name, vintage) VALUES ('sabse_ra10', 'y', 2011)")
+        conn.execute("INSERT INTO wines (wine_code, name, vintage) VALUES ('sabse_ra10', 'y', 2011)")
 
 
 def test_db_path_env_override(monkeypatch, tmp_path):

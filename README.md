@@ -12,7 +12,7 @@ A small, self-contained wine stock and invoicing app: Python plus a single SQLit
 
 - **Self-contained:** one program and one SQLite file the app creates itself on first start.
 - **Logic in Python, data in the database:** the database holds tables and identity keys only.
-- **Data model kept 1:1 with Access in v1**, with English column names (mapping in `migrate/column_map.py`).
+- **Data model kept 1:1 with Access in v1**, with English table and column names (mapping in `migrate/column_map.py`).
 
 ## Data stays out of this repository
 

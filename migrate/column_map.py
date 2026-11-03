@@ -1,6 +1,19 @@
 """Access (Danish) -> SQLite (English) column names. Single source of truth for the
-schema DDL and the data migration. Table names are unchanged in v1.
-Values are never renamed or translated, only column names."""
+schema DDL and the data migration. COLUMN_MAP is keyed by the Access (source) table name;
+TABLE_MAP gives the SQLite table name (migration 001).
+Values are never renamed or translated, only table and column names."""
+
+TABLE_MAP = {
+    "tLagre": "warehouses",
+    "tKunder": "customers",
+    "tVinliste": "wines",
+    "tFaktura": "invoices",
+    "tVinlager": "stock_movements",
+    "tVinlager_Salg": "invoice_lines",
+    "tPrisliste_Cost": "cost_prices",
+    "tPrisliste_Salg": "sales_prices",
+    "tSettings": "settings",
+}
 
 COLUMN_MAP = {
     "tLagre": {
