@@ -1,0 +1,2 @@
+nicegui>=3,<4
+pywebview>=6,<7
