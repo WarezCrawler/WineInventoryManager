@@ -6,6 +6,7 @@ A small, self-contained wine stock and invoicing app: Python plus a single SQLit
 
 ## Documentation
 
+- [Functionality list](docs/Functionality.md): the main functions, what is done and what is planned.
 - [Design and implementation plan](docs/Vinlager_Python_SQLite_Design.md): scope of v1 (main menu, stock changes, invoice input), data model, business rules taken from the Access code, screens, build steps and backlog.
 
 ## Principles
