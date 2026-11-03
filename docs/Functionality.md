@@ -2,7 +2,7 @@
 
 The main functions of the app as a list, kept short. Details and rules are in [Vinlager_Python_SQLite_Design.md](Vinlager_Python_SQLite_Design.md) (section numbers in brackets).
 
-Rows are never deleted, only soft deleted (flagged).
+Rows are never deleted. Where a delete function exists (today only invoices) it is a soft delete (flagged).
 
 Status: **Done** = built, **v1** = planned for the first release, **Later** = backlog (after v1).
 
@@ -23,7 +23,7 @@ Status: **Done** = built, **v1** = planned for the first release, **Later** = ba
 
 ## 3. Manage open invoices
 - 3.1 Create an invoice and edit its header: **v1** (§6.3)
-- 3.2 Add, edit and soft delete invoice lines with live price, VAT and discount calculation: **v1** (§5.1, §6.4)
+- 3.2 Add and edit invoice lines with live price, VAT and discount calculation: **v1** (§5.1, §6.4)
 - 3.3 Close an invoice (it becomes read-only): **v1**
 - 3.4 Soft delete an invoice (flagged, never removed): **v1**
 
