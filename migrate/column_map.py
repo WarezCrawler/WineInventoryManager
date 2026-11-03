@@ -106,3 +106,15 @@ COLUMN_MAP = {
         "Description": "description",
     },
 }
+
+
+# Access columns of type Single (4 bytes). A reader that widens them to 8 bytes shows e.g.
+# 120.75749969482422 where Access exports 120.7575, so these (and only these) are shortened to the
+# shortest decimal that gives the same 4-byte value. Source: export/schema.txt. All other numeric
+# columns are Double (or integers) and are used as read.
+SINGLE_COLUMNS = {
+    ("tPrisliste_Cost", "CostPris"),
+    ("tPrisliste_Salg", "SalgsPris"),
+    ("tPrisliste_Salg", "Momssats"),
+    ("tVinlager_Salg", "Momssats"),
+}

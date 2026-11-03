@@ -2,8 +2,9 @@
 import argparse
 import sys
 
-from nicegui import ui
+from nicegui import app, run, ui
 
+from migrate.import_accdb import import_accdb
 from winedb.browse import table_counts, table_view
 from winedb.config import db_path
 from winedb.db import connect
@@ -21,6 +22,57 @@ def _load(name: str | None):
         conn.close()
 
 
+async def _browse(path_input) -> None:
+    """Native file dialog (only available in the program window, not in a browser tab)."""
+    try:
+        import webview
+        window = app.native.main_window
+        files = await window.create_file_dialog(webview.FileDialog.OPEN, file_types=("Access database (*.accdb;*.mdb)", "All files (*.*)"))
+    except Exception:
+        ui.notify("The file dialog is only available in the program window. Type or paste the path instead.")
+        return
+    if files:
+        path_input.value = files[0]
+
+
+def _import_dialog() -> None:
+    with ui.dialog().props("persistent") as dialog, ui.card().classes("w-[44rem] max-w-full"):
+        ui.label("Import from Access database").classes("text-lg font-bold")
+        ui.label("One-time import into an empty database. The Access file is only read, never changed. "
+                 "Use a copy of it.").classes("text-sm opacity-70")
+        with ui.row().classes("w-full items-center no-wrap"):
+            path = ui.input("Access file (.accdb)").props("dense clearable").classes("grow")
+            ui.button("Browse...", on_click=lambda: _browse(path)).props("flat dense no-caps")
+        status = ui.label("").classes("font-bold")
+        report = ui.textarea().props("readonly outlined input-class=font-mono").classes("w-full")
+        report.set_visibility(False)
+        spinner = ui.spinner(size="lg")
+        spinner.set_visibility(False)
+
+        async def start() -> None:
+            if not (path.value or "").strip():
+                status.text = "Choose the Access file first."
+                return
+            go.disable()
+            spinner.set_visibility(True)
+            status.text = "Importing and checking the data..."
+            outcome = await run.io_bound(import_accdb, path.value.strip().strip('"'))
+            spinner.set_visibility(False)
+            status.text = outcome.message
+            report.value = outcome.report
+            report.set_visibility(bool(outcome.report))
+            if outcome.ok:
+                close.text = "Show the tables"
+                close.on_click(lambda: ui.navigate.to("/"))
+            else:
+                go.enable()
+
+        with ui.row().classes("w-full justify-end"):
+            close = ui.button("Close", on_click=dialog.close).props("flat no-caps")
+            go = ui.button("Import", on_click=start).props("no-caps")
+    dialog.open()
+
+
 @ui.page("/")
 @ui.page("/table/{name}")
 def table_page(name: str | None = None):
@@ -36,10 +88,7 @@ def table_page(name: str | None = None):
             weight = "font-bold" if table == selected else ""
             ui.link(f"{table} ({count})", f"/table/{table}").classes(weight)
         ui.separator()
-        # Placeholder: the importer (CSV migration tool) is not built yet.
-        ui.button("Import from Access database", icon="upload_file",
-                  on_click=lambda: ui.notify("Not built yet: the import from the Access database is a planned feature.")
-                  ).props("flat dense no-caps")
+        ui.button("Import from Access database", icon="upload_file", on_click=_import_dialog).props("flat dense no-caps")
 
     if view is None:
         ui.label(f"Unknown table: {name}")
