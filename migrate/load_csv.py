@@ -1,6 +1,6 @@
 """One-time load of the Access CSV export into a new SQLite database (schema version 1).
 
-    python -m migrate.load_csv <csv_dir> <new_database_file> [--summary] [--report FILE]
+    python -m migrate.load_csv <csv_dir> <new_database_file> [--settings FILE] [--summary] [--report FILE]
 
 Principles (design doc section 8, step 3):
 - Faithful, not clean: rows are inserted as they are. Nothing is repaired, defaulted or dropped.
@@ -16,8 +16,9 @@ import csv
 import sys
 from pathlib import Path
 
-from migrate.column_map import COLUMN_MAP, TABLE_MAP
+from migrate.column_map import COLUMN_MAP, SETTINGS_COLUMNS, SETTINGS_KEYS, SETTINGS_SOURCE, TABLE_MAP
 from winedb.db import connect
+from winedb.settings import save_settings
 
 SCHEMA_VERSION = 1
 
@@ -61,8 +62,27 @@ def column_types(conn, table: str) -> dict[str, str]:
     return {r["name"]: r["type"].upper() for r in conn.execute(f'PRAGMA table_info("{table}")')}
 
 
-def load(csv_dir: Path | str, db_file: Path | str) -> dict[str, int]:
-    """Create db_file (must not hold data yet) and load all tables. Returns rows loaded per table."""
+def read_settings(csv_dir: Path) -> dict[str, str]:
+    """Access tSettings -> the settings.json values (English keys; empty cell -> empty string)."""
+    path = csv_dir / f"{SETTINGS_SOURCE}.csv"
+    if not path.exists():
+        raise LoadError(f"Missing {path}")
+    header, rows = read_csv(path)
+    if header != SETTINGS_COLUMNS:
+        raise LoadError(f"{path.name}: header {header} differs from {SETTINGS_COLUMNS}")
+    values = {}
+    for n, (key, value, _description) in enumerate(rows, start=2):
+        if key not in SETTINGS_KEYS:
+            raise LoadError(f"{path.name} line {n}: unknown setting {key!r}")
+        if SETTINGS_KEYS[key] in values:
+            raise LoadError(f"{path.name} line {n}: setting {key!r} appears twice")
+        values[SETTINGS_KEYS[key]] = value
+    return values
+
+
+def load(csv_dir: Path | str, db_file: Path | str, settings_file: Path | str | None = None) -> dict[str, int]:
+    """Create db_file (must not hold data yet) and load all tables; write tSettings to settings_file
+    (settings.json) when given. Returns rows loaded per table."""
     csv_dir, db_file = Path(csv_dir), Path(db_file)
     # Read and validate everything before touching the database.
     data = {}
@@ -78,6 +98,7 @@ def load(csv_dir: Path | str, db_file: Path | str) -> dict[str, int]:
                 f"same columns in a different order: {set(header) == set(mapping)}"
             )
         data[access_table] = rows
+    settings = read_settings(csv_dir)
 
     conn = connect(db_file)
     try:
@@ -106,6 +127,9 @@ def load(csv_dir: Path | str, db_file: Path | str) -> dict[str, int]:
             raise
     finally:
         conn.close()
+    if settings_file is not None:
+        save_settings(settings, settings_file)
+        loaded["settings.json"] = len(settings)
     return loaded
 
 
@@ -113,6 +137,7 @@ def main(argv=None) -> int:
     p = argparse.ArgumentParser(description="One-time load of the Access CSV export into a new database")
     p.add_argument("csv_dir")
     p.add_argument("database", help="new database file; must not exist or must be empty")
+    p.add_argument("--settings", help="settings.json to write (default: next to the database file)")
     p.add_argument("--summary", action="store_true", help="report without row-level data (safe to share)")
     p.add_argument("--report", help="also write the report to this file")
     args = p.parse_args(argv)
@@ -120,11 +145,12 @@ def main(argv=None) -> int:
     from migrate.verify import run_all, render  # imported late: verify is independent of the loader
 
     try:
-        loaded = load(args.csv_dir, args.database)
+        settings_file = Path(args.settings) if args.settings else Path(args.database).parent / "settings.json"
+        loaded = load(args.csv_dir, args.database, settings_file)
     except LoadError as e:
         print(f"LOAD FAILED, nothing written: {e}", file=sys.stderr)
         return 2
-    results = run_all(args.csv_dir, args.database)
+    results = run_all(args.csv_dir, args.database, settings_file)
     text = render(results, loaded, summary=args.summary)
     print(text)
     if args.report:

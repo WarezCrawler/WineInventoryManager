@@ -1,9 +1,10 @@
 """One-time import from an Access file into the app's database (used by the import button).
 
 Steps: read the .accdb into temporary CSV files -> load them into a temporary new database -> run the
-independent audit -> only if there is no FAIL, copy the result into the target database. The target is
+independent audit -> only if there is no FAIL, copy the result into the target database and settings.json. The target is
 untouched on any failure, and the temporary files (they hold business data) are always removed.
 """
+import shutil
 import sqlite3
 import tempfile
 from dataclasses import dataclass
@@ -12,8 +13,9 @@ from pathlib import Path
 from migrate.load_csv import LoadError, load
 from migrate.read_accdb import AccdbError, export_csv
 from migrate.verify import render, run_all
-from winedb.db import connect
 from winedb.config import db_path
+from winedb.db import connect
+from winedb.settings import has_values, settings_path
 
 
 @dataclass
@@ -32,19 +34,23 @@ def target_has_data(db_file: Path | str) -> bool:
         conn.close()
 
 
-def import_accdb(accdb: Path | str, target: Path | str | None = None) -> ImportOutcome:
+def import_accdb(accdb: Path | str, target: Path | str | None = None, settings_target: Path | str | None = None) -> ImportOutcome:
     target = Path(target) if target is not None else db_path()
+    settings_target = Path(settings_target) if settings_target is not None else settings_path()
     accdb = Path(accdb)
     if target_has_data(target):
         return ImportOutcome(False, "The database already contains data. The import only works into an empty database.", "")
+    if has_values(settings_target):
+        return ImportOutcome(False, f"{settings_target.name} already has settings. The import only works into empty settings: "
+                                    "move or empty that file first.", "")
     with tempfile.TemporaryDirectory(prefix="wine-import-") as tmp:
         tmp = Path(tmp)
         try:
             export_csv(accdb, tmp / "csv")
-            loaded = load(tmp / "csv", tmp / "staging.db")
+            loaded = load(tmp / "csv", tmp / "staging.db", tmp / "settings.json")
         except (AccdbError, LoadError) as e:
             return ImportOutcome(False, f"Import stopped, nothing was changed: {e}", "")
-        results = run_all(tmp / "csv", tmp / "staging.db")
+        results = run_all(tmp / "csv", tmp / "staging.db", tmp / "settings.json")
         report = render(results, loaded)
         failed = [r for r in results if r.status == "FAIL"]
         if failed:
@@ -56,6 +62,9 @@ def import_accdb(accdb: Path | str, target: Path | str | None = None) -> ImportO
         finally:
             src.close()
             dst.close()
+        settings_target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(tmp / "settings.json", settings_target)
     review = sum(1 for r in results if r.status == "REVIEW")
-    return ImportOutcome(True, f"Imported {sum(loaded.values())} rows in {len(loaded)} tables. "
+    tables = {k: v for k, v in loaded.items() if k != "settings.json"}
+    return ImportOutcome(True, f"Imported {sum(tables.values())} rows in {len(tables)} tables and {loaded.get('settings.json', 0)} settings. "
                                f"{review} items to review (data issues already in the Access file).", report)

@@ -48,6 +48,3 @@ CREATE TABLE prices_cost (
 CREATE TABLE prices_sales (
   sales_price_id INTEGER PRIMARY KEY AUTOINCREMENT, item_id INTEGER NOT NULL, price_type TEXT COLLATE NOCASE,
   sales_price REAL, vat_rate REAL NOT NULL DEFAULT 0.25);
-
-CREATE TABLE app_settings (
-  setting_key TEXT NOT NULL PRIMARY KEY COLLATE NOCASE, setting_value TEXT, description TEXT);

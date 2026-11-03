@@ -85,9 +85,6 @@ CREATE TABLE prices_cost (
 CREATE TABLE prices_sales (
   sales_price_id INTEGER PRIMARY KEY AUTOINCREMENT, item_id INTEGER NOT NULL, price_type TEXT COLLATE NOCASE,
   sales_price REAL, vat_rate REAL NOT NULL DEFAULT 0.25);
-
-CREATE TABLE app_settings (
-  setting_key TEXT NOT NULL PRIMARY KEY COLLATE NOCASE, setting_value TEXT, description TEXT);
 ```
 
 ### 4.1 Column mapping (Access → SQLite)
@@ -131,7 +128,7 @@ Machine-readable: `migrate/column_map.py` (`COLUMN_MAP[table][old_name] = new_na
 | | test_slet | test_delete | unused, kept 1:1 |
 | tPrisliste_Salg → `prices_sales` | Id / Vin_ID | sales_price_id / item_id | |
 | | PrisType / SalgsPris / Momssats | price_type / sales_price / vat_rate | |
-| tSettings → `app_settings` | Setting / Value / Description | setting_key / setting_value / description | |
+| tSettings → `settings.json` (not a table, see decision 13) | Setting | invoice_address / invoice_bank_details / invoice_payment_terms / invoice_pdf_folder | `<fakt_adr>`, `<fakt_bank_opl>`, `<fakt_betaling_bet>`, `<fakt_savelocation>`; the Danish Description column is documentation and is not carried over |
 
 Not migrated: `USysApplicationLog`. Names to note: `stock_transactions` (Access `tVinlager`) is the stock movement table (`stock_line_id`) and `invoice_lines` (Access `tVinlager_Salg`) holds invoice sale lines (`sales_line_id`).
 
@@ -232,7 +229,7 @@ WineInventoryManager/   # project root
 Each step has an acceptance check; do them in order.
 
 1. **Skeleton.** Repo, venv, `pytest`, NiceGUI; `config.py` (database path). *Check:* `pytest` runs; no database exists yet.
-2. **Schema and first start (§4.2).** `001_init.sql` from §4 and `db.connect()` with create-if-missing and `user_version` handling. *Check:* deleting `data/` and starting the app creates the file with all 9 tables and `user_version = 1`; a second start changes nothing; a database with `user_version = 99` is refused; column names equal `COLUMN_MAP` and the types and nullability match `schema.txt`.
+2. **Schema and first start (§4.2).** `001_init.sql` from §4 and `db.connect()` with create-if-missing and `user_version` handling. *Check:* deleting `data/` and starting the app creates the file with all 8 tables and `user_version = 1`; a second start changes nothing; a database with `user_version = 99` is refused; column names equal `COLUMN_MAP` and the types and nullability match `schema.txt`.
 3. **Data load + reconciliation (`migrate/load_csv.py`).** Read the 9 CSVs (UTF-8 with BOM) from `export/csv/` and rename each header with `COLUMN_MAP` (§4.1; fail if a CSV has a column the map does not know, or the map has one the CSV lacks); booleans `True/False` → 1/0; empty cell → `NULL` (the CSV cannot tell empty from NULL, so text fields lose that distinction; document it); insert with the original ids so keys are preserved; `AUTOINCREMENT` continues after the max id (SQLite keeps it in `sqlite_sequence`; check with a test insert); the target is created through `connect()` and a non-empty target is refused. *Check:* row counts 143 / 176 / 3 / 240 / 442 / 4 / 863 / 665 / 228; Σ `amount_ex_vat` = 326,572.40; max `invoice_id` 150; 129 closed + 14 open invoices; 341 negative `stock_transactions` rows. Re-runnable by deleting the target file first.
 4. **Logic + golden test.** `logic.line_amounts()` (§5.1) and `stock.on_hand()` (§5.3). *Check:* pytest recomputes all 665 lines from the DB and gets the stored totals (0 mismatches); on-hand for all 283 wine/warehouse combinations matches the CSV-based calculation (15 of them negative, as in the data report).
 5. **UI shell and main menu.** NiceGUI app, menu page with the open-invoice list and buttons (§6.1), disabled backlog buttons. *Check:* the list shows the 14 open invoices (or 10 if the inner join is kept).
@@ -243,7 +240,7 @@ Each step has an acceptance check; do them in order.
 
 ## 9. Backlog (not in v1)
 
-From the Access app, in rough priority: invoice **PDF** (`rFaktura`; spec `export/report_spec/rFaktura.spec.json`, reference PDFs in `export/reference_invoices/`); **re-open closed invoice** (`fFaktura_genåben`); **copy invoice** (`DBCopyFakt`: copies header with new customer, today's date and `is_closed`/`warehouse_id`/`hide_subtotals`; copies lines with date today); **customer maintenance** and **mail list export** (`on_mailing_list = 1 AND is_hidden = 0 AND email <> ''`, 128 eligible); **wine list maintenance** (value lists: type `Rød;Hvid;Rose;Desert;Mousserende`, size `Alm;Halv;Magnum;Db. Mgm;50 cl.`, though the data uses `MGM`/`DMGM`); **price lists** sale/cost; **warehouse** master data; **settings** (`app_settings`, incl. PDF save folder); **stock report** (`qVinliste`) and **customer list** (`rKundeListe`); **stock import** (`qVinlager_Change_Import`); **Excel export** (`uVinlager_Excel`); **consistency check query**.
+From the Access app, in rough priority: invoice **PDF** (`rFaktura`; spec `export/report_spec/rFaktura.spec.json`, reference PDFs in `export/reference_invoices/`); **re-open closed invoice** (`fFaktura_genåben`); **copy invoice** (`DBCopyFakt`: copies header with new customer, today's date and `is_closed`/`warehouse_id`/`hide_subtotals`; copies lines with date today); **customer maintenance** and **mail list export** (`on_mailing_list = 1 AND is_hidden = 0 AND email <> ''`, 128 eligible); **wine list maintenance** (value lists: type `Rød;Hvid;Rose;Desert;Mousserende`, size `Alm;Halv;Magnum;Db. Mgm;50 cl.`, though the data uses `MGM`/`DMGM`); **price lists** sale/cost; **warehouse** master data; **settings screen** (`settings.json`, incl. PDF save folder); **stock report** (`qVinliste`) and **customer list** (`rKundeListe`); **stock import** (`qVinlager_Change_Import`); **Excel export** (`uVinlager_Excel`); **consistency check query**.
 
 ### 9.1 Key strategy: identity keys now, business keys later
 
@@ -274,11 +271,12 @@ After v1 is stable: the data model clean-up (foreign keys, lookup tables, normal
 | 9 | "No value" in lookup columns is stored by Access as `0` (`invoice_header.customer_id` 4 rows, `invoice_lines.warehouse_id` 2 rows in the snapshot) and as NULL (`invoice_header.warehouse_id` 3 rows). The loader keeps both as they are. Convert 0 to NULL in one explicit, reported step after the load, so NULL is the only "none"? | Keep as loaded; decide before first release |
 | 10 | Access creates the invoice first and assigns the customer afterwards (hence customer 0). The new app may change this process (pick the customer when creating the invoice) | Same as Access in v1; redesign later |
 | 11 | **Decided: rows are never deleted; if a delete function exists it is a soft delete (a flag; the row stays).** Access could technically delete rows but never offered it in the UI, and only invoices had a flag (`invoice_header.is_deleted`). So v1 has no delete function except the invoice flag, and no flag columns on other tables. Open: the "Delete line" button in §6.4 (was it in the Access line form? how does a user correct a wrong line?) | Invoice soft delete only; add a flag with a new migration if another delete function is designed |
-| 12 | Invoice output. **Decided:** an on-screen **preview** in the app, which need not look exactly like the PDF. **Proposed:** the PDF is generated directly from the data with ReportLab (pure Python, works in the packaged `.exe`; no printing step), saved to the PDF folder from `app_settings` and opened in the default viewer. The preview and the PDF use the same line and total calculation (§5.1), so they cannot disagree on amounts. Checked against the reference PDFs in `export/reference_invoices/`. Open: keep the saved PDF when an invoice is later reopened and changed (warn or overwrite)? | ReportLab; generate on request and save a copy named by invoice number |
+| 12 | Invoice output. **Decided:** an on-screen **preview** in the app, which need not look exactly like the PDF. **Proposed:** the PDF is generated directly from the data with ReportLab (pure Python, works in the packaged `.exe`; no printing step), saved to the PDF folder from `settings.json` and opened in the default viewer. The preview and the PDF use the same line and total calculation (§5.1), so they cannot disagree on amounts. Checked against the reference PDFs in `export/reference_invoices/`. Open: keep the saved PDF when an invoice is later reopened and changed (warn or overwrite)? | ReportLab; generate on request and save a copy named by invoice number |
+| 13 | **Decided: app configuration lives in `settings.json`, not in the database.** The database holds master data and transactions only. `settings.json` sits next to the `data` folder (`WINE_SETTINGS_PATH` overrides) and holds the four Access settings: `invoice_address`, `invoice_bank_details`, `invoice_payment_terms` (text printed on invoices) and `invoice_pdf_folder` (machine-specific). The import writes it from `tSettings` and the audit compares every value. **Planned in migration 002:** copy the three invoice texts onto each invoice record, so the records carry themselves; until then the file holds them as the defaults for new invoices. A backup is therefore the `data` folder plus `settings.json` | Done as described |
 
 Risks:
 - **Rounding:** VBA `Round` rounds half to even; Python's `round` does too and matched all 665 lines, but keep the golden test, since a switch to `Decimal` or another rounding rule would break it silently.
 - **One user at a time:** the SQLite file must be used by a single program instance on a local disk. A second instance gets "database is locked" on write, and the file must not sit in a synced folder (Dropbox, OneDrive) while the app runs, which can corrupt it. Back up by copying the file while the app is closed.
 - **Collation:** `NOCASE` folds ASCII only. `Ø` and `ø` compare as different inside SQL, so Python-side matching is used where Danish letters matter.
-- **Personal and bank data** in the CSVs and `app_settings`: keep out of any shared repo.
+- **Personal and bank data** in the CSVs and `settings.json`: keep out of any shared repo (`settings.json` is in `.gitignore`).
 - **Unverified:** the Access form *display* behaviours (tab order, exact layout) are not reproduced; only data behaviour is specified above.

@@ -10,6 +10,7 @@ dist/
 
 # Secrets and local config
 .env
+settings.json
 
 # Personal / business data (customers, bank details): never commit
 *.accdb

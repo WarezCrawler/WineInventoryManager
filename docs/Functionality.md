@@ -40,7 +40,7 @@ Status: **Done** = built, **v1** = planned for the first release, **Later** = ba
 - 5.4 Mailing list export: **Later**
 
 ## 6. Wines, prices and warehouses
-- 6.1 Browse the tables (items, prices, warehouses, app settings): **Done** (table browser)
+- 6.1 Browse the tables (items, prices, warehouses): **Done** (table browser)
 - 6.2 Maintain the wine list: **Later**
 - 6.3 Maintain sales and cost prices: **Later**
 - 6.4 Price lists (sales, cost): **Later**
@@ -51,7 +51,8 @@ Status: **Done** = built, **v1** = planned for the first release, **Later** = ba
 - 7.2 Export to Excel: **Later**
 
 ## 8. Settings
-- 8.1 View and edit settings, including the PDF save folder: **Later**
+- 8.1 Settings in `settings.json`, not in the database: the invoice texts and the PDF save folder (filled by the Access import): **Done**
+- 8.2 Screen to view and edit the settings: **Later**
 
 ## 9. Database and migration
 - 9.1 The database file is created on first start, and upgraded by numbered migrations with a backup first: **Done**

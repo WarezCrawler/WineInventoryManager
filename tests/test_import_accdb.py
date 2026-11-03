@@ -1,5 +1,6 @@
 """Import flow (read -> load -> audit -> copy into the target). The .accdb reader is replaced by synthetic
 CSVs here; set WINE_ACCDB (and WINE_CSV_DIR) to also test the real reader against a real export."""
+import json
 import os
 import sqlite3
 from pathlib import Path
@@ -34,9 +35,10 @@ def rows(db, table):
 def test_success_copies_the_verified_data_into_the_target(tmp_path, fake_reader):
     fake_reader()
     target = tmp_path / "wine.db"
-    out = import_accdb("x.accdb", target)
-    assert out.ok and "Imported 9 rows in 9 tables" in out.message
+    out = import_accdb("x.accdb", target, target.parent / "settings.json")
+    assert out.ok and "Imported 8 rows in 8 tables and 4 settings" in out.message
     assert rows(target, "customers") == 1 and rows(target, "invoice_lines") == 1
+    assert json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))["invoice_bank_details"] == "Konto 1234"
     assert sqlite3.connect(target).execute("PRAGMA user_version").fetchone()[0] == 1
     assert not target_has_data(tmp_path / "other.db")
 
@@ -44,16 +46,25 @@ def test_success_copies_the_verified_data_into_the_target(tmp_path, fake_reader)
 def test_refuses_a_target_that_has_data(tmp_path, fake_reader):
     fake_reader()
     target = tmp_path / "wine.db"
-    assert import_accdb("x.accdb", target).ok
-    again = import_accdb("x.accdb", target)
+    assert import_accdb("x.accdb", target, target.parent / "settings.json").ok
+    again = import_accdb("x.accdb", target, target.parent / "settings.json")
     assert not again.ok and "already contains data" in again.message
     assert rows(target, "customers") == 1  # unchanged
+
+
+def test_refuses_settings_that_already_have_values(tmp_path, fake_reader):
+    fake_reader()
+    (tmp_path / "settings.json").write_text(json.dumps({"invoice_pdf_folder": "D:/mine"}), encoding="utf-8")
+    out = import_accdb("x.accdb", tmp_path / "wine.db", tmp_path / "settings.json")
+    assert not out.ok and "already has settings" in out.message
+    assert not target_has_data(tmp_path / "wine.db")
+    assert "D:/mine" in (tmp_path / "settings.json").read_text(encoding="utf-8")  # untouched
 
 
 def test_unreadable_file_leaves_the_target_empty(tmp_path, fake_reader):
     fake_reader(error="not an Access database")
     target = tmp_path / "wine.db"
-    out = import_accdb("x.accdb", target)
+    out = import_accdb("x.accdb", target, target.parent / "settings.json")
     assert not out.ok and "nothing was changed" in out.message
     assert not target_has_data(target)
 
@@ -61,15 +72,16 @@ def test_unreadable_file_leaves_the_target_empty(tmp_path, fake_reader):
 def test_audit_failure_imports_nothing(tmp_path, fake_reader, monkeypatch):
     fake_reader()
     real = ia.run_all
-    def broken(csv_dir, db_file):
-        results = real(csv_dir, db_file)
+    def broken(*args):
+        results = real(*args)
         results[0].status = "FAIL"
         return results
     monkeypatch.setattr(ia, "run_all", broken)
     target = tmp_path / "wine.db"
-    out = import_accdb("x.accdb", target)
+    out = import_accdb("x.accdb", target, target.parent / "settings.json")
     assert not out.ok and "nothing was imported" in out.message and out.report
     assert not target_has_data(target)
+    assert not (tmp_path / "settings.json").exists()  # settings are only written after a clean audit
 
 
 def test_temporary_files_are_removed(tmp_path, fake_reader, monkeypatch):
@@ -77,7 +89,7 @@ def test_temporary_files_are_removed(tmp_path, fake_reader, monkeypatch):
     seen = []
     real = ia.tempfile.TemporaryDirectory
     monkeypatch.setattr(ia.tempfile, "TemporaryDirectory", lambda **kw: seen.append(real(**kw)) or seen[-1])
-    import_accdb("x.accdb", tmp_path / "wine.db")
+    import_accdb("x.accdb", tmp_path / "wine.db", tmp_path / "settings.json")
     assert seen and not Path(seen[0].name).exists()
 
 

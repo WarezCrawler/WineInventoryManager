@@ -8,7 +8,7 @@ import csv
 import struct
 from pathlib import Path
 
-from migrate.column_map import COLUMN_MAP, SINGLE_COLUMNS
+from migrate.column_map import COLUMN_MAP, SETTINGS_COLUMNS, SETTINGS_SOURCE, SINGLE_COLUMNS
 
 
 class AccdbError(RuntimeError):
@@ -54,15 +54,15 @@ def export_csv(accdb: Path | str, out_dir: Path | str) -> dict[str, int]:
         raise AccdbError(f"{accdb.name} could not be read as an Access database: {e}") from e
     out_dir.mkdir(parents=True, exist_ok=True)
     written = {}
-    for table, mapping in COLUMN_MAP.items():
+    tables = {**{t: list(m) for t, m in COLUMN_MAP.items()}, SETTINGS_SOURCE: SETTINGS_COLUMNS}
+    for table, columns in tables.items():
         if table not in db.catalog:
             raise AccdbError(f"{accdb.name} has no table {table}: this is not the Vinlager database")
         data = db.parse_table(table)
-        missing = [c for c in mapping if c not in data]
+        missing = [c for c in columns if c not in data]
         if missing:
             raise AccdbError(f"Table {table} lacks columns {missing}")
-        columns = list(mapping)
-        n = len(data[columns[0]]) if columns else 0
+        n = len(data[columns[0]])
         with open(out_dir / f"{table}.csv", "w", newline="", encoding="utf-8-sig") as f:
             w = csv.writer(f)
             w.writerow(columns)

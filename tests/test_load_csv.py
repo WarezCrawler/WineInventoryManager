@@ -1,18 +1,25 @@
 """Loader and verifier tests on synthetic CSVs (no real data). The real-data audit is the report
 produced by `python -m migrate.load_csv`; set WINE_CSV_DIR to also run it from pytest."""
 import csv
+import json
 import os
 import sqlite3
 from pathlib import Path
 
 import pytest
 
-from migrate.column_map import COLUMN_MAP, TABLE_MAP
+from migrate.column_map import COLUMN_MAP, SETTINGS_COLUMNS, TABLE_MAP
 from migrate.load_csv import LoadError, load, main
 from migrate.verify import run_all
 
 
-def write_csvs(directory: Path, overrides: dict | None = None, header_overrides: dict | None = None):
+SETTINGS_ROWS = [
+    ["<fakt_adr>", "Gade 1\nÅrhus", "d"], ["<fakt_bank_opl>", "Konto 1234", "d"],
+    ["<fakt_betaling_bet>", "", "d"], ["<fakt_savelocation>", "C:\\Faktura\\", "d"],
+]
+
+
+def write_csvs(directory: Path, overrides: dict | None = None, header_overrides: dict | None = None, settings_rows=None):
     """One valid row per table (keys 1), with æøå, a quoted newline and a boolean."""
     directory.mkdir(parents=True, exist_ok=True)
     rows = {
@@ -24,7 +31,6 @@ def write_csvs(directory: Path, overrides: dict | None = None, header_overrides:
         "tVinlager_Salg": ["1", "1", "2013-06-21 00:00:05", "3", "", "1", "120.7575", "300.5", "375.625", "Alm", "80", "240", "0.25", "1", "0"],
         "tPrisliste_Cost": ["1", "1", "Standard", "80", ""],
         "tPrisliste_Salg": ["1", "1", "Alm", "120.7575", "0.25"],
-        "tSettings": ["<fakt_adr>", "Gade 1", "d"],
     }
     rows.update(overrides or {})
     for table, mapping in COLUMN_MAP.items():
@@ -33,18 +39,26 @@ def write_csvs(directory: Path, overrides: dict | None = None, header_overrides:
             w = csv.writer(f)
             w.writerow(header)
             w.writerow(rows[table])
+    with open(directory / "tSettings.csv", "w", newline="", encoding="utf-8-sig") as f:
+        w = csv.writer(f)
+        w.writerow(SETTINGS_COLUMNS)
+        w.writerows((settings_rows if settings_rows is not None else SETTINGS_ROWS))
 
 
 def test_load_is_faithful_and_audit_passes(tmp_path):
     write_csvs(tmp_path / "csv")
-    loaded = load(tmp_path / "csv", tmp_path / "w.db")
-    assert loaded == {t: 1 for t in TABLE_MAP.values()}
+    loaded = load(tmp_path / "csv", tmp_path / "w.db", tmp_path / "settings.json")
+    assert loaded == {**{t: 1 for t in TABLE_MAP.values()}, "settings.json": 4}
+    assert json.loads((tmp_path / "settings.json").read_text(encoding="utf-8")) == {
+        "invoice_address": "Gade 1\nÅrhus", "invoice_bank_details": "Konto 1234",
+        "invoice_payment_terms": "", "invoice_pdf_folder": "C:\\Faktura\\"}
+    assert "app_settings" not in {r[0] for r in sqlite3.connect(tmp_path / "w.db").execute("SELECT name FROM sqlite_master")}
     conn = sqlite3.connect(tmp_path / "w.db")
     assert conn.execute("SELECT address FROM customers").fetchone()[0] == 'Vej 1\nnæste "linje"'
     assert conn.execute("SELECT is_hidden, on_mailing_list FROM customers").fetchone() == (0, 1)
     assert conn.execute("SELECT sales_price FROM invoice_lines").fetchone()[0] == 120.7575
     assert conn.execute("SELECT comment FROM warehouses").fetchone()[0] is None  # empty cell -> NULL
-    assert not [r for r in run_all(tmp_path / "csv", tmp_path / "w.db") if r.status == "FAIL"]
+    assert not [r for r in run_all(tmp_path / "csv", tmp_path / "w.db", tmp_path / "settings.json") if r.status == "FAIL"]
 
 
 def test_data_that_breaks_rules_is_loaded_unchanged_and_reported(tmp_path):
@@ -106,3 +120,21 @@ def test_summary_report_has_no_row_level_data(tmp_path, capsys):
 def test_real_export_has_no_failures(tmp_path):
     load(os.environ["WINE_CSV_DIR"], tmp_path / "real.db")
     assert not [r for r in run_all(os.environ["WINE_CSV_DIR"], tmp_path / "real.db") if r.status == "FAIL"]
+
+
+def test_settings_are_checked_against_the_file(tmp_path):
+    write_csvs(tmp_path / "csv")
+    load(tmp_path / "csv", tmp_path / "w.db", tmp_path / "settings.json")
+    data = json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))
+    data["invoice_bank_details"] = "Konto 9999"   # tampered
+    data["extra"] = "x"                            # not in Access
+    (tmp_path / "settings.json").write_text(json.dumps(data), encoding="utf-8")
+    result = next(r for r in run_all(tmp_path / "csv", tmp_path / "w.db", tmp_path / "settings.json") if r.name == "settings.json")
+    assert result.status == "FAIL" and len(result.rows) == 2
+
+
+def test_unknown_setting_stops_the_load(tmp_path):
+    write_csvs(tmp_path / "csv", settings_rows=[["<something_new>", "x", "d"]])
+    with pytest.raises(LoadError, match="unknown setting"):
+        load(tmp_path / "csv", tmp_path / "w.db", tmp_path / "settings.json")
+    assert not (tmp_path / "settings.json").exists() and not (tmp_path / "w.db").exists()

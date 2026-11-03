@@ -16,7 +16,7 @@ import sqlite3
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from migrate.column_map import COLUMN_MAP, TABLE_MAP
+from migrate.column_map import COLUMN_MAP, SETTINGS_KEYS, SETTINGS_SOURCE, TABLE_MAP
 
 MAX_ROWS_SHOWN = 25
 
@@ -82,6 +82,28 @@ def check_cells(conn, csv_dir) -> list[Result]:
     return out
 
 
+def check_settings(csv_dir, settings_file) -> Result:
+    """Every tSettings row against settings.json (read back from the file), and nothing extra in the file."""
+    import json
+    _, rows = _read(csv_dir, SETTINGS_SOURCE)
+    try:
+        actual = json.loads(Path(settings_file).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        return Result("settings.json", "FAIL", f"cannot read {settings_file}: {e}")
+    problems = []
+    expected = {SETTINGS_KEYS.get(r["Setting"], r["Setting"]): r["Value"] for r in rows}
+    for key, value in expected.items():
+        if key not in actual:
+            problems.append(f"{key}: missing in settings.json")
+        elif actual[key] != value:
+            problems.append(f"{key}: differs from the Access value")
+    for key in actual:
+        if key not in expected:
+            problems.append(f"{key}: not in Access tSettings")
+    return Result("settings.json", "FAIL" if problems else "PASS",
+                  f"{len(expected)} settings compared" if not problems else f"{len(problems)} differences", problems)
+
+
 def check_aggregates(conn, csv_dir) -> list[Result]:
     """Independent fingerprints: nulls, numeric sums, text lengths, max keys."""
     out = []
@@ -122,7 +144,7 @@ def check_autoincrement(db_file) -> Result:
     for table in TABLE_MAP.values():
         pk = next((r[1] for r in mem.execute(f'PRAGMA table_info("{table}")') if r[5] == 1 and r[2].upper() == "INTEGER"), None)
         if pk is None:
-            continue  # app_settings: text key
+            continue
         top = mem.execute(f'SELECT COALESCE(MAX("{pk}"), 0) FROM "{table}"').fetchone()[0]
         try:
             cols = [r[1] for r in mem.execute(f'PRAGMA table_info("{table}")') if r[3] and r[1] != pk]
@@ -210,11 +232,14 @@ def check_data_quality(conn) -> list[Result]:
     return out
 
 
-def run_all(csv_dir, db_file) -> list[Result]:
+def run_all(csv_dir, db_file, settings_file=None) -> list[Result]:
     conn = sqlite3.connect(db_file)
     try:
-        return [*check_cells(conn, csv_dir), *check_aggregates(conn, csv_dir),
-                check_autoincrement(db_file), *check_data_quality(conn)]
+        results = [*check_cells(conn, csv_dir), *check_aggregates(conn, csv_dir),
+                   check_autoincrement(db_file), *check_data_quality(conn)]
+        if settings_file is not None:
+            results.insert(0, check_settings(csv_dir, settings_file))
+        return results
     finally:
         conn.close()
 

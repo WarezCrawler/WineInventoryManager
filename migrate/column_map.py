@@ -1,6 +1,7 @@
 """Access (Danish) -> SQLite (English) column names. Single source of truth for the
 schema DDL and the data migration. COLUMN_MAP is keyed by the Access (source) table name;
-TABLE_MAP gives the SQLite table name (migration 001).
+TABLE_MAP gives the SQLite table name (migration 001). Access tSettings is not a database table:
+it becomes settings.json (SETTINGS_KEYS).
 Values are never renamed or translated, only table and column names."""
 
 TABLE_MAP = {
@@ -12,7 +13,6 @@ TABLE_MAP = {
     "tVinlager": "stock_transactions",
     "tPrisliste_Cost": "prices_cost",
     "tPrisliste_Salg": "prices_sales",
-    "tSettings": "app_settings",
 }
 
 COLUMN_MAP = {
@@ -100,11 +100,6 @@ COLUMN_MAP = {
         "SalgsPris": "sales_price",
         "Momssats": "vat_rate",
     },
-    "tSettings": {
-        "Setting": "setting_key",
-        "Value": "setting_value",
-        "Description": "description",
-    },
 }
 
 
@@ -117,4 +112,17 @@ SINGLE_COLUMNS = {
     ("tPrisliste_Salg", "SalgsPris"),
     ("tPrisliste_Salg", "Momssats"),
     ("tVinlager_Salg", "Momssats"),
+}
+
+
+# Access tSettings (Setting, Value, Description) -> settings.json (app configuration, not data).
+# The Danish Description column is documentation and is not carried over. The three invoice texts are
+# defaults for new invoices; the plan is to copy them onto each invoice record in migration 002.
+SETTINGS_SOURCE = "tSettings"
+SETTINGS_COLUMNS = ["Setting", "Value", "Description"]
+SETTINGS_KEYS = {
+    "<fakt_adr>": "invoice_address",
+    "<fakt_bank_opl>": "invoice_bank_details",
+    "<fakt_betaling_bet>": "invoice_payment_terms",
+    "<fakt_savelocation>": "invoice_pdf_folder",   # machine-specific folder for the PDF files
 }
