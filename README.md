@@ -2,7 +2,7 @@
 
 A small, self-contained wine stock and invoicing app: Python plus a single SQLite file, no server. It replaces a Microsoft Access application that has been in use for over ten years.
 
-**Status:** design phase. The data migration mapping exists (`migrate/column_map.py`); the app itself is not built yet.
+**Status:** groundwork. The database first start is built (`winedb/db.py`: the app creates its own SQLite file and upgrades it with numbered migration scripts); the app screens are not built yet.
 
 ## Documentation
 
