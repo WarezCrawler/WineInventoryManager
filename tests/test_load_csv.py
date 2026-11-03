@@ -61,17 +61,22 @@ def test_load_is_faithful_and_audit_passes(tmp_path):
     assert not [r for r in run_all(tmp_path / "csv", tmp_path / "w.db", tmp_path / "settings.json") if r.status == "FAIL"]
 
 
-def test_data_that_breaks_rules_is_loaded_unchanged_and_reported(tmp_path):
+def test_data_that_breaks_rules_is_loaded_unchanged_and_matches_the_source(tmp_path):
     bad_line = ["1", "99", "2013-06-21 00:00:05", "", "", "77", "0", "0", "0", "", "0", "0", "0", "0", "0"]
     write_csvs(tmp_path / "csv", {"tVinlager_Salg": bad_line})
-    load(tmp_path / "csv", tmp_path / "w.db")
+    load(tmp_path / "csv", tmp_path / "w.db", tmp_path / "settings.json")
     conn = sqlite3.connect(tmp_path / "w.db")
     assert conn.execute("SELECT item_id, quantity, invoice_id, warehouse_id FROM invoice_lines").fetchone() == (99, None, 77, 0)
-    results = {r.name: r.status for r in run_all(tmp_path / "csv", tmp_path / "w.db")}
-    assert results["invoice lines without item"] == "REVIEW"
-    assert results["invoice lines without invoice"] == "REVIEW"
-    assert results["invoice lines with quantity empty or <= 0"] == "REVIEW"
-    assert "FAIL" not in results.values()
+    results = run_all(tmp_path / "csv", tmp_path / "w.db", tmp_path / "settings.json")
+    assert {r.status for r in results} == {"PASS"}   # the audit only compares with the source
+
+
+def test_next_id_continues_after_the_max_id(tmp_path):
+    write_csvs(tmp_path / "csv", {"tKunder": ["41", "Æble", "", "", "", "", "", "", "False", "", "False", ""]})
+    load(tmp_path / "csv", tmp_path / "w.db")
+    conn = sqlite3.connect(tmp_path / "w.db")
+    conn.execute("INSERT INTO customers (customer_name) VALUES ('Ny')")
+    assert conn.execute("SELECT MAX(customer_id) FROM customers").fetchone()[0] == 42
 
 
 def test_verifier_detects_a_tampered_database(tmp_path):
@@ -82,8 +87,8 @@ def test_verifier_detects_a_tampered_database(tmp_path):
     conn.execute("UPDATE invoice_lines SET sales_price = 120.76")
     conn.commit()
     failed = {r.name for r in run_all(tmp_path / "csv", tmp_path / "w.db") if r.status == "FAIL"}
-    assert {"cells items", "cells invoice_lines", "aggregates invoice_lines"} <= failed
-    assert "aggregates items" not in failed  # same length: only the cell-for-cell check can see it
+    assert {"cells items", "cells invoice_lines", "totals invoice_lines"} <= failed
+    assert "totals items" not in failed  # same length: only the cell-for-cell check can see it
 
 
 def test_header_mismatch_stops_the_load_and_writes_nothing(tmp_path):
@@ -113,7 +118,7 @@ def test_summary_report_has_no_row_level_data(tmp_path, capsys):
     write_csvs(tmp_path / "csv")
     assert main([str(tmp_path / "csv"), str(tmp_path / "w.db"), "--summary"]) == 0
     out = capsys.readouterr().out
-    assert "FAIL 0" in out and "Ørsted" not in out and "a@b.dk" not in out
+    assert "the import matches the source" in out and "Ørsted" not in out and "a@b.dk" not in out
 
 
 @pytest.mark.skipif(not os.environ.get("WINE_CSV_DIR"), reason="set WINE_CSV_DIR to audit a real export")

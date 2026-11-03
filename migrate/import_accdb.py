@@ -64,7 +64,6 @@ def import_accdb(accdb: Path | str, target: Path | str | None = None, settings_t
             dst.close()
         settings_target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(tmp / "settings.json", settings_target)
-    review = sum(1 for r in results if r.status == "REVIEW")
     tables = {k: v for k, v in loaded.items() if k != "settings.json"}
     return ImportOutcome(True, f"Imported {sum(tables.values())} rows in {len(tables)} tables and {loaded.get('settings.json', 0)} settings. "
-                               f"{review} items to review (data issues already in the Access file).", report)
+                               "The import matches the source.", report)

@@ -220,7 +220,7 @@ WineInventoryManager/   # project root
     ui/              # NiceGUI pages: menu, stock_change, invoice_header, invoice_lines
   migrate/
     column_map.py    # Access -> English table and column names (§4.1)
-    load_csv.py      # CSV -> SQLite, then reconcile
+    load_csv.py      # CSV -> SQLite; verify.py then compares the result with the source
   tests/
 ```
 

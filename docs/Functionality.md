@@ -57,7 +57,7 @@ Status: **Done** = built, **v1** = planned for the first release, **Later** = ba
 ## 9. Database and migration
 - 9.1 The database file is created on first start, and upgraded by numbered migrations with a backup first: **Done**
 - 9.2 One-time load of the Access CSV export, loaded as-is: **Done** (`python -m migrate.load_csv`)
-- 9.3 Independent audit report of the load (PASS / FAIL / REVIEW, summary mode without row-level data): **Done**
+- 9.3 Check of the import against the source: every cell, row counts and column totals (amounts, costs, quantities); PASS or FAIL, nothing else; summary mode without row-level data: **Done**
 - 9.4 "Import from Access database" button: pick the `.accdb`, read it directly, audit, then fill the empty database; shows the audit report: **Done**
 
 ## 10. Program
