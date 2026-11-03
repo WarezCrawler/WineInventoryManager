@@ -50,12 +50,12 @@ CREATE TABLE customers (
   comment TEXT);
 
 CREATE TABLE items (
-  wine_id INTEGER PRIMARY KEY AUTOINCREMENT,
-  wine_code TEXT NOT NULL COLLATE NOCASE, name TEXT NOT NULL COLLATE NOCASE, vintage INTEGER NOT NULL,
+  item_id INTEGER PRIMARY KEY AUTOINCREMENT,
+  item_code TEXT NOT NULL COLLATE NOCASE, name TEXT NOT NULL COLLATE NOCASE, vintage INTEGER NOT NULL,
   country TEXT, producer TEXT, region TEXT,
-  wine_type TEXT COLLATE NOCASE, bottle_size TEXT COLLATE NOCASE, drink_by_year INTEGER, mature_year INTEGER,
+  item_type TEXT COLLATE NOCASE, bottle_size TEXT COLLATE NOCASE, drink_by_year INTEGER, mature_year INTEGER,
   is_discontinued INTEGER DEFAULT 0, is_private INTEGER DEFAULT 0, comment TEXT);
-CREATE UNIQUE INDEX wine_code ON items (wine_code);
+CREATE UNIQUE INDEX item_code ON items (item_code);
 
 CREATE TABLE invoice_header (
   invoice_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -65,13 +65,13 @@ CREATE INDEX invoice_header_warehouse_id ON invoice_header (warehouse_id);
 
 CREATE TABLE stock_transactions (
   stock_line_id INTEGER PRIMARY KEY AUTOINCREMENT,
-  created_at TEXT, wine_id INTEGER NOT NULL, quantity INTEGER DEFAULT 0, comment TEXT,
+  created_at TEXT, item_id INTEGER NOT NULL, quantity INTEGER DEFAULT 0, comment TEXT,
   warehouse_id INTEGER NOT NULL);
 CREATE INDEX stock_transactions_warehouse_id ON stock_transactions (warehouse_id);
 
 CREATE TABLE invoice_lines (
   sales_line_id INTEGER PRIMARY KEY AUTOINCREMENT,
-  wine_id INTEGER NOT NULL, created_at TEXT, quantity INTEGER DEFAULT 0, comment TEXT,
+  item_id INTEGER NOT NULL, created_at TEXT, quantity INTEGER DEFAULT 0, comment TEXT,
   invoice_id INTEGER NOT NULL, sales_price REAL DEFAULT 0, amount_ex_vat REAL DEFAULT 0,
   amount_incl_vat REAL DEFAULT 0, price_type TEXT COLLATE NOCASE, cost_price REAL DEFAULT 0,
   amount_cost REAL DEFAULT 0, vat_rate REAL DEFAULT 0, warehouse_id INTEGER NOT NULL,
@@ -79,11 +79,11 @@ CREATE TABLE invoice_lines (
 CREATE INDEX invoice_lines_warehouse_id ON invoice_lines (warehouse_id);
 
 CREATE TABLE prices_cost (
-  cost_price_id INTEGER PRIMARY KEY AUTOINCREMENT, wine_id INTEGER NOT NULL, price_type TEXT COLLATE NOCASE,
+  cost_price_id INTEGER PRIMARY KEY AUTOINCREMENT, item_id INTEGER NOT NULL, price_type TEXT COLLATE NOCASE,
   cost_price REAL, test_delete INTEGER);
 
 CREATE TABLE prices_sales (
-  sales_price_id INTEGER PRIMARY KEY AUTOINCREMENT, wine_id INTEGER NOT NULL, price_type TEXT COLLATE NOCASE,
+  sales_price_id INTEGER PRIMARY KEY AUTOINCREMENT, item_id INTEGER NOT NULL, price_type TEXT COLLATE NOCASE,
   sales_price REAL, vat_rate REAL NOT NULL DEFAULT 0.25);
 
 CREATE TABLE app_settings (
@@ -103,10 +103,10 @@ Machine-readable: `migrate/column_map.py` (`COLUMN_MAP[table][old_name] = new_na
 | | Skjul | is_hidden | hidden from pickers |
 | | Mailadr / Maillist | email / on_mailing_list | |
 | | Kommentar | comment | |
-| tVinliste → `items` | Vin_ID / Vin_UID | wine_id / wine_code | unique short code |
+| tVinliste → `items` | Vin_ID / Vin_UID | item_id / item_code | unique short code |
 | | Vin_Navn / Vin_Årgang | name / vintage | |
 | | Vin_Land / Vin_Hus / Vin_Område | country / producer / region | `Hus` = wine house |
-| | Vin_Type / Vin_Str | wine_type / bottle_size | |
+| | Vin_Type / Vin_Str | item_type / bottle_size | |
 | | Vin_Udløb / Vin_Moden | drink_by_year / mature_year | |
 | | Udgået / Private | is_discontinued / is_private | |
 | | Vin_Kommentar | comment | |
@@ -115,10 +115,10 @@ Machine-readable: `migrate/column_map.py` (`COLUMN_MAP[table][old_name] = new_na
 | | FakturaDato / Kommentar | invoice_date / comment | |
 | | HideSubTotals / Delete | hide_subtotals / is_deleted | `Delete` is a soft delete |
 | tVinlager → `stock_transactions` | VinLager_ID | stock_line_id | |
-| | Date_Create / Vin_ID / Lager_ID | created_at / wine_id / warehouse_id | |
+| | Date_Create / Vin_ID / Lager_ID | created_at / item_id / warehouse_id | |
 | | Quantity / Kommentar | quantity / comment | signed |
 | tVinlager_Salg → `invoice_lines` | Vin_SalgID / Fakt_ID | sales_line_id / invoice_id | |
-| | Vin_ID / Lager_ID / Date_Create | wine_id / warehouse_id / created_at | |
+| | Vin_ID / Lager_ID / Date_Create | item_id / warehouse_id / created_at | |
 | | Quantity / Kommentar | quantity / comment | |
 | | SalgsPris | sales_price | unit price, VAT included |
 | | SamletPris | amount_ex_vat | |
@@ -126,10 +126,10 @@ Machine-readable: `migrate/column_map.py` (`COLUMN_MAP[table][old_name] = new_na
 | | CostPris / SamletCostPris | cost_price / amount_cost | |
 | | Momssats / PrisType | vat_rate / price_type | |
 | | Rabat | discount | VAT-included amount |
-| tPrisliste_Cost → `prices_cost` | Id / Vin_ID | cost_price_id / wine_id | |
+| tPrisliste_Cost → `prices_cost` | Id / Vin_ID | cost_price_id / item_id | |
 | | PrisType / CostPris | price_type / cost_price | |
 | | test_slet | test_delete | unused, kept 1:1 |
-| tPrisliste_Salg → `prices_sales` | Id / Vin_ID | sales_price_id / wine_id | |
+| tPrisliste_Salg → `prices_sales` | Id / Vin_ID | sales_price_id / item_id | |
 | | PrisType / SalgsPris / Momssats | price_type / sales_price / vat_rate | |
 | tSettings → `app_settings` | Setting / Value / Description | setting_key / setting_value / description | |
 
@@ -171,7 +171,7 @@ amount_cost     = round(cost_price * quantity, 2)
 - The line stores a **snapshot** of price, VAT rate and cost; later price list changes never alter existing lines.
 
 ### 5.3 Stock on hand (`TotalVinQ`, view `uVinlager`)
-`on_hand(wine_id, warehouse_id) = SUM(stock_transactions.quantity) − SUM(invoice_lines.quantity)`, summed over all rows for that wine and warehouse. Negative `stock_transactions.quantity` rows are stock removals/corrections (341 of 863 rows). Computed in Python with two `SUM` queries. No stock guard exists in Access, so none in v1.
+`on_hand(item_id, warehouse_id) = SUM(stock_transactions.quantity) − SUM(invoice_lines.quantity)`, summed over all rows for that wine and warehouse. Negative `stock_transactions.quantity` rows are stock removals/corrections (341 of 863 rows). Computed in Python with two `SUM` queries. No stock guard exists in Access, so none in v1.
 
 ### 5.4 Invoice rules
 - **Open invoice** = `is_closed = 0`. Lines can be added/edited only on open invoices (the Access line form is bound to `qVinlager_Salg`, which filters `is_closed <> True`). Closing = set `invoice_header.is_closed = 1`. Re-opening is a separate screen (backlog).
@@ -181,7 +181,7 @@ amount_cost     = round(cost_price * quantity, 2)
 - **Invoice number** = `invoice_id` (auto-increment). Python reads the new id from the insert (`lastrowid`); the Access code used `DMax`, which could return another user's invoice number. With SQLite `lastrowid` is exact.
 
 ### 5.5 Stock change rules (`fVinlager_Change`)
-A stock change is an insert into `stock_transactions`: `wine_id`, `warehouse_id`, `quantity` (signed, + adds, − removes), `comment`, `created_at` (default now). The form shows the wine's name, vintage, house, country, size, type and the current quantity for the chosen wine and warehouse (`TotalVinQ`). Existing movements are not deleted from this form (deletion disabled in Access).
+A stock change is an insert into `stock_transactions`: `item_id`, `warehouse_id`, `quantity` (signed, + adds, − removes), `comment`, `created_at` (default now). The form shows the wine's name, vintage, house, country, size, type and the current quantity for the chosen wine and warehouse (`TotalVinQ`). Existing movements are not deleted from this form (deletion disabled in Access).
 
 ## 6. Screens
 
@@ -199,7 +199,7 @@ Title "Lagerstyring i særklasse" with the logo (`export/assets/VinotrentinoLogo
 Access detail kept: the open-invoice list uses an **inner join to customers**, so the 4 drafts with customer `0` are invisible there. **Open decision:** use a LEFT JOIN and show "(ingen kunde)" so they can be finished or deleted (recommended), or keep the Access behaviour.
 
 ### 6.2 Stock change screen
-Wine picker (search by `wine_code` prefix as in the invoice form, or by name; list shows name, vintage, type, size) → warehouse → signed quantity → comment → date (default now) → **Save** / **Cancel**. Live: current quantity and quantity after the change. Below: the 20 latest movements for the chosen wine and warehouse.
+Wine picker (search by `item_code` prefix as in the invoice form, or by name; list shows name, vintage, type, size) → warehouse → signed quantity → comment → date (default now) → **Save** / **Cancel**. Live: current quantity and quantity after the change. Below: the 20 latest movements for the chosen wine and warehouse.
 
 ### 6.3 Invoice header screen
 Fields as in §5.4. Buttons: Save, Close invoice (sets `is_closed`), Open lines. New invoice requires a customer (the Access default of customer `0` is not offered).
@@ -247,13 +247,13 @@ From the Access app, in rough priority: invoice **PDF** (`rFaktura`; spec `expor
 
 ### 9.1 Key strategy: identity keys now, business keys later
 
-- **v1:** every relation uses the identity (surrogate) key, 1:1 with Access (`wine_id`, `customer_id`, `warehouse_id`, `invoice_id`, ...).
-- **Direction:** every dimension (wine, customer, warehouse, and the free-text lookups like `price_type`, `wine_type`, `bottle_size`) eventually gets a **business key that the users give and name themselves**, and relations point to that instead of the identity.
-- **Precedent in the existing system:** `wine_code` (`Vin_UID`) is exactly that. It was added after the fact, is unique, is what users type to find a wine, and has worked for 10+ years, but the tables still relate through `wine_id`, not the code. v1 keeps this as it is. `price_type` is already a de-facto business key (free text, used in comparisons) without being a proper dimension.
+- **v1:** every relation uses the identity (surrogate) key, 1:1 with Access (`item_id`, `customer_id`, `warehouse_id`, `invoice_id`, ...).
+- **Direction:** every dimension (wine, customer, warehouse, and the free-text lookups like `price_type`, `item_type`, `bottle_size`) eventually gets a **business key that the users give and name themselves**, and relations point to that instead of the identity.
+- **Precedent in the existing system:** `item_code` (`Vin_UID`) is exactly that. It was added after the fact, is unique, is what users type to find a wine, and has worked for 10+ years, but the tables still relate through `item_id`, not the code. v1 keeps this as it is. `price_type` is already a de-facto business key (free text, used in comparisons) without being a proper dimension.
 - **Cheap rules for v1 so the later change stays small:**
-  1. Keep `wine_code` unique (it is, `CREATE UNIQUE INDEX`) and show it in wine pickers and lists next to the name.
-  2. Resolve a wine from a typed code in **one** function (`find_wine_by_code`), and never hard-code identity values or assume ids are consecutive or meaningful.
-  3. Keep each relation lookup (`wine_id`, `customer_id`, `warehouse_id` joins) in the `stock.py` / `invoice_header.py` data functions, not in the UI.
+  1. Keep `item_code` unique (it is, `CREATE UNIQUE INDEX`) and show it in wine pickers and lists next to the name.
+  2. Resolve a wine from a typed code in **one** function (`find_item_by_code`), and never hard-code identity values or assume ids are consecutive or meaningful.
+  3. Keep each relation lookup (`item_id`, `customer_id`, `warehouse_id` joins) in the `stock.py` / `invoice_header.py` data functions, not in the UI.
 - **How the change is made later:** one numbered migration per dimension (§4.2): add the business key column, backfill and check it is unique and not empty, add the unique index, add the new key column to the child tables, fill it by joining on the old id, then rebuild the tables without the old column. The golden tests (§8 step 4) must give identical results before and after.
 - **Open (not for v1):** which dimensions get a key and what it looks like (customer number? warehouse code?); whether the business key should become the primary key itself or stay a unique alternate key; how to handle codes users want to rename after history exists (history must keep pointing at the same wine).
 

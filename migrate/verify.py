@@ -163,10 +163,10 @@ def check_data_quality(conn) -> list[Result]:
                 "SELECT sales_line_id FROM invoice_lines WHERE invoice_id NOT IN (SELECT invoice_id FROM invoice_header) ORDER BY 1",
                 "lines", lambda r: f"line {r[0]}"),
         _review("invoice lines without wine", conn,
-                "SELECT sales_line_id FROM invoice_lines WHERE wine_id NOT IN (SELECT wine_id FROM items) ORDER BY 1",
+                "SELECT sales_line_id FROM invoice_lines WHERE item_id NOT IN (SELECT item_id FROM items) ORDER BY 1",
                 "lines", lambda r: f"line {r[0]}"),
         _review("stock movements without wine", conn,
-                "SELECT stock_line_id FROM stock_transactions WHERE wine_id NOT IN (SELECT wine_id FROM items) ORDER BY 1",
+                "SELECT stock_line_id FROM stock_transactions WHERE item_id NOT IN (SELECT item_id FROM items) ORDER BY 1",
                 "rows", lambda r: f"row {r[0]}"),
         _review("rows with a warehouse not in warehouses", conn,
                 """SELECT 'invoice_lines', sales_line_id FROM invoice_lines WHERE warehouse_id NOT IN (SELECT warehouse_id FROM warehouses)
@@ -174,20 +174,20 @@ def check_data_quality(conn) -> list[Result]:
                    UNION ALL SELECT 'invoice_header', invoice_id FROM invoice_header WHERE warehouse_id IS NOT NULL AND warehouse_id NOT IN (SELECT warehouse_id FROM warehouses)""",
                 "rows", lambda r: f"{r[0]} {r[1]}"),
         _review("price rows without wine", conn,
-                """SELECT 'prices_cost', cost_price_id FROM prices_cost WHERE wine_id NOT IN (SELECT wine_id FROM items)
-                   UNION ALL SELECT 'prices_sales', sales_price_id FROM prices_sales WHERE wine_id NOT IN (SELECT wine_id FROM items)""",
+                """SELECT 'prices_cost', cost_price_id FROM prices_cost WHERE item_id NOT IN (SELECT item_id FROM items)
+                   UNION ALL SELECT 'prices_sales', sales_price_id FROM prices_sales WHERE item_id NOT IN (SELECT item_id FROM items)""",
                 "rows", lambda r: f"{r[0]} {r[1]}"),
         _review("invoice lines with quantity empty or <= 0", conn,
                 "SELECT sales_line_id, quantity FROM invoice_lines WHERE quantity IS NULL OR quantity <= 0 ORDER BY 1", "lines", lambda r: f"line {r[0]}: quantity {r[1]}"),
         _review("wines without sales price", conn,
-                "SELECT wine_id FROM items WHERE wine_id NOT IN (SELECT wine_id FROM prices_sales) ORDER BY 1", "items", lambda r: f"wine {r[0]}"),
+                "SELECT item_id FROM items WHERE item_id NOT IN (SELECT item_id FROM prices_sales) ORDER BY 1", "items", lambda r: f"wine {r[0]}"),
         _review("wines without cost price", conn,
-                "SELECT wine_id FROM items WHERE wine_id NOT IN (SELECT wine_id FROM prices_cost) ORDER BY 1", "items", lambda r: f"wine {r[0]}"),
+                "SELECT item_id FROM items WHERE item_id NOT IN (SELECT item_id FROM prices_cost) ORDER BY 1", "items", lambda r: f"wine {r[0]}"),
         _review("negative stock (wine x warehouse; stock entries probably missing)", conn,
-                """SELECT wine_id, warehouse_id, SUM(q) FROM (
-                     SELECT wine_id, warehouse_id, quantity AS q FROM stock_transactions
-                     UNION ALL SELECT wine_id, warehouse_id, -quantity FROM invoice_lines)
-                   GROUP BY wine_id, warehouse_id HAVING SUM(q) < 0 ORDER BY 1, 2""",
+                """SELECT item_id, warehouse_id, SUM(q) FROM (
+                     SELECT item_id, warehouse_id, quantity AS q FROM stock_transactions
+                     UNION ALL SELECT item_id, warehouse_id, -quantity FROM invoice_lines)
+                   GROUP BY item_id, warehouse_id HAVING SUM(q) < 0 ORDER BY 1, 2""",
                 "combinations", lambda r: f"wine {r[0]} warehouse {r[1]}: {r[2]}"),
         _review("invoices marked deleted", conn,
                 "SELECT invoice_id, is_closed FROM invoice_header WHERE is_deleted = 1 ORDER BY 1", "invoice_header",
@@ -197,7 +197,7 @@ def check_data_quality(conn) -> list[Result]:
                "(SELECT COUNT(*) FROM stock_transactions WHERE quantity < 0)")[0]
     out.append(Result("facts", "INFO", f"closed invoices {totals[0]}, open invoices {totals[1]}, negative stock movements {totals[2]}"))
     for label, sql in [
-        ("wine_type", "SELECT wine_type, COUNT(*) FROM items GROUP BY 1 ORDER BY 1"),
+        ("item_type", "SELECT item_type, COUNT(*) FROM items GROUP BY 1 ORDER BY 1"),
         ("bottle_size", "SELECT bottle_size, COUNT(*) FROM items GROUP BY 1 ORDER BY 1"),
         ("price_type (prices_sales)", "SELECT price_type, COUNT(*) FROM prices_sales GROUP BY 1 ORDER BY 1"),
         ("price_type (prices_cost)", "SELECT price_type, COUNT(*) FROM prices_cost GROUP BY 1 ORDER BY 1"),

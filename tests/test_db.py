@@ -97,9 +97,9 @@ def test_migration_numbering_gap_is_rejected(tmp_path):
 
 def test_wine_code_is_unique_ignoring_case(tmp_path):
     conn = connect(tmp_path / "wine.db")
-    conn.execute("INSERT INTO items (wine_code, name, vintage) VALUES ('SAbSe_RA10', 'x', 2010)")
+    conn.execute("INSERT INTO items (item_code, name, vintage) VALUES ('SAbSe_RA10', 'x', 2010)")
     with pytest.raises(sqlite3.IntegrityError):
-        conn.execute("INSERT INTO items (wine_code, name, vintage) VALUES ('sabse_ra10', 'y', 2011)")
+        conn.execute("INSERT INTO items (item_code, name, vintage) VALUES ('sabse_ra10', 'y', 2011)")
 
 
 def test_db_path_env_override(monkeypatch, tmp_path):
