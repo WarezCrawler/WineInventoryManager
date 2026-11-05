@@ -64,3 +64,4 @@ Status: **Done** = built, **v1** = planned for the first release, **Later** = ba
 - 10.1 Table browser: lists the tables and shows their rows: **Done**
 - 10.2 Runs as a Windows program (`build.ps1`, own window): **Done**
 - 10.3 Backup routine and logins: **Later**
+- 10.4 User-friendly column names in the front-end, in every list, grid and form (for example "Customer name" instead of `customer_name`, "Amount excl. VAT" instead of `amount_ex_vat`). The database names stay technical; the labels are defined in one place, so a name can be changed without touching the screens. The table browser shows the technical names until this is done: **v1**
