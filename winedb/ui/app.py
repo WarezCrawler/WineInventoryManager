@@ -1,4 +1,4 @@
-"""Table browser: start with `python -m winedb`, then open each table in the browser."""
+"""Table browser and import dialog (NiceGUI). Start with `python -m winedb`."""
 import argparse
 import sys
 

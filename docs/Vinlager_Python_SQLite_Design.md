@@ -217,7 +217,11 @@ WineInventoryManager/   # project root
     logic.py         # pure functions: line_amounts(), default_cost(), (no DB access)
     stock.py         # on_hand(), add_movement(), recent_movements()
     invoices.py      # open_invoices(), get/save_header(), lines(), save_line(), close()
-    ui/              # NiceGUI pages: menu, stock_change, invoice_header, invoice_lines
+    browse.py        # read-only table content for the table browser (no UI imports)
+    ui/              # the whole front-end, and the only place that imports NiceGUI/pywebview:
+                     #   app.py (table browser, import dialog), later menu, stock_change, invoice_header,
+                     #   invoice_lines and labels.py (user-friendly column names). tests/test_architecture.py
+                     #   fails if anything else imports the UI libraries or if the back-end imports winedb.ui
   migrate/
     column_map.py    # Access -> English table and column names (§4.1)
     load_csv.py      # CSV -> SQLite; verify.py then compares the result with the source
