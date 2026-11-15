@@ -1,12 +1,12 @@
 # Vinlager – Python + SQLite: Design and Implementation Plan (v1)
 
-Follows `Vinlager_Python_Rebuild_Plan.md` (self-contained app, SQLite, logic in Python, one-time migration, Access only as archive). An earlier draft of this document used MySQL by mistake; the database is **SQLite**, a single local file the app creates itself.
+Follows `Vinlager_Python_Rebuild_Plan.md` (not in this repository: it is in the `docs` folder of the Access decomposition named below; its principles are repeated in §2) (self-contained app, SQLite, logic in Python, one-time migration, Access only as archive). An earlier draft of this document used MySQL by mistake; the database is **SQLite**, a single local file the app creates itself.
 Project root: `A:\Development\WineInventoryManager` (this repo). The Access decomposition is the read-only source in `A:\Development\WineDB_py\WineDB_work` (all `export/...` and `scripts/...` paths below are relative to that folder).
 Sources: `export/schema.txt`, `export/code/*.vba.txt`, `export/modules/*`, `export/queries_sql.txt`, `export/forms/*`, `export/csv/*`, `export/data_quality_report.txt`, `scripts/check_rabat.py`.
 
 ## 1. Scope
 
-**In v1 (built):**
+**In scope for v1** (what is built so far is in [Functionality.md](Functionality.md)):
 1. Main menu (replacement for `fNavigation`).
 2. Stock change input (replacement for `fVinlager_Change`).
 3. Invoice input: header (`fFaktura`) and sale lines (`fVinlager_Salg`), including closing an invoice.
@@ -20,7 +20,7 @@ Sources: `export/schema.txt`, `export/code/*.vba.txt`, `export/modules/*`, `expo
 - **All logic in Python:** price/VAT/discount maths, stock on hand, defaults, validation, workflow.
 - **No FKs in v1 on purpose.** Access enforced none, and the data has orphans (4 invoices point to customer 0: ids 6, 54, 59, 108). FKs would block the 1:1 load.
 - **Plain SQL, no ORM.** Python's built-in `sqlite3` with parameterised queries.
-- **UI separated from logic:** the UI only calls functions in `stock.py` / `invoice_header.py`, so the toolkit can be replaced.
+- **UI separated from logic:** the UI only calls functions in `stock.py` / `invoices.py`, so the toolkit can be replaced.
 
 ## 3. Stack (decisions)
 
@@ -35,7 +35,7 @@ Sources: `export/schema.txt`, `export/code/*.vba.txt`, `export/modules/*`, `expo
 ## 4. Data model (1:1 copy)
 
 Type mapping (SQLite): AutoNumber → `INTEGER PRIMARY KEY AUTOINCREMENT` (ids are never reused, and explicit ids can be inserted by the migration); Long/Integer → `INTEGER`; Text and Memo → `TEXT` (the Access length limits are not enforced); Yes/No → `INTEGER` 0/1; Date/Time → `TEXT` in ISO form `YYYY-MM-DD HH:MM:SS` (the exact format of the CSV export, and it sorts correctly); Double and Single → `REAL` (8-byte, so exported values like `120.7575` load unchanged).
-**Tables and columns are renamed to English** (snake_case, ASCII, no reserved words; tables use descriptive English names such as `items`, `invoice_header`, `invoice_lines`; the Access name stays visible in §4.1 and `TABLE_MAP`). Only names change: data values (`Standard`, `Alm`, `Rød`, country names, settings keys like `<fakt_adr>`) are loaded as they are. The full mapping is in §4.1 and in `migrate/column_map.py`, which is the single source of truth for the DDL and the migration module.
+**Tables and columns are renamed to English** (snake_case, ASCII, no reserved words; tables use descriptive English names such as `items`, `invoice_header`, `invoice_lines`; the Access name stays visible in §4.1 and `TABLE_MAP`). Only names change: data values (`Standard`, `Alm`, `Rød`, country names, settings keys like `<fakt_adr>`) are loaded as they are. The full mapping is in §4.1 and in `migrate/column_map.py`, which is the single source of truth for the names. The DDL itself is `winedb/migrations/001_init.sql`; a test checks that its tables and columns equal the mapping.
 
 ```sql
 CREATE TABLE warehouses (
@@ -196,7 +196,7 @@ Title "Lagerstyring i særklasse" with the logo (`export/assets/VinotrentinoLogo
 Access detail kept: the open-invoice list uses an **inner join to customers**, so the 4 drafts with customer `0` are invisible there. **Open decision:** use a LEFT JOIN and show "(ingen kunde)" so they can be finished or deleted (recommended), or keep the Access behaviour.
 
 ### 6.2 Stock change screen
-Wine picker (search by `item_code` prefix as in the invoice form, or by name; list shows name, vintage, type, size) → warehouse → signed quantity → comment → date (default now) → **Save** / **Cancel**. Live: current quantity and quantity after the change. Below: the 20 latest movements for the chosen wine and warehouse.
+Wine picker (search by `item_code` prefix as in the invoice form, or by name; list shows name, vintage, type, size) → warehouse → type of change (decision 14) → signed quantity → comment → date (default now) → **Save** / **Cancel**. Live: current quantity and quantity after the change. Below: the 20 latest movements for the chosen wine and warehouse.
 
 ### 6.3 Invoice header screen
 Fields as in §5.4. Buttons: Save, Close invoice (sets `is_closed`), Open lines. New invoice requires a customer (the Access default of customer `0` is not offered).
@@ -212,7 +212,9 @@ WineInventoryManager/   # project root
   data/                # SQLite file, created on first start, git-ignored
   winedb/
     config.py        # database path (WINE_DB_PATH or default)
-    db.py            # connect() = create-if-missing + migrations (§4.2), query(), execute(), transaction()
+    db.py            # connect() = create-if-missing + migrations (§4.2); a transaction() helper is added
+                     #   with the first write function (step 4 onwards), not built yet
+    settings.py      # settings.json (decision 13)
     migrations/      # 001_init.sql (§4), then 002_..., numbered
     logic.py         # pure functions: line_amounts(), default_cost(), (no DB access)
     stock.py         # on_hand(), add_movement(), recent_movements()
@@ -254,7 +256,7 @@ From the Access app, in rough priority: invoice **PDF** (`rFaktura`; spec `expor
 - **Cheap rules for v1 so the later change stays small:**
   1. Keep `item_code` unique (it is, `CREATE UNIQUE INDEX`) and show it in wine pickers and lists next to the name.
   2. Resolve a wine from a typed code in **one** function (`find_item_by_code`), and never hard-code identity values or assume ids are consecutive or meaningful.
-  3. Keep each relation lookup (`item_id`, `customer_id`, `warehouse_id` joins) in the `stock.py` / `invoice_header.py` data functions, not in the UI.
+  3. Keep each relation lookup (`item_id`, `customer_id`, `warehouse_id` joins) in the `stock.py` / `invoices.py` data functions, not in the UI.
 - **How the change is made later:** one numbered migration per dimension (§4.2): add the business key column, backfill and check it is unique and not empty, add the unique index, add the new key column to the child tables, fill it by joining on the old id, then rebuild the tables without the old column. The golden tests (§8 step 4) must give identical results before and after.
 - **Open (not for v1):** which dimensions get a key and what it looks like (customer number? warehouse code?); whether the business key should become the primary key itself or stay a unique alternate key; how to handle codes users want to rename after history exists (history must keep pointing at the same wine).
 
@@ -277,8 +279,10 @@ After v1 is stable: the data model clean-up (foreign keys, lookup tables, normal
 | 11 | **Decided: rows are never deleted; if a delete function exists it is a soft delete (a flag; the row stays).** Access could technically delete rows but never offered it in the UI, and only invoices had a flag (`invoice_header.is_deleted`). So v1 has no delete function except the invoice flag, and no flag columns on other tables. Open: the "Delete line" button in §6.4 (was it in the Access line form? how does a user correct a wrong line?) | Invoice soft delete only; add a flag with a new migration if another delete function is designed |
 | 12 | Invoice output. **Decided:** an on-screen **preview** in the app, which need not look exactly like the PDF. **Proposed:** the PDF is generated directly from the data with ReportLab (pure Python, works in the packaged `.exe`; no printing step), saved to the PDF folder from `settings.json` and opened in the default viewer. The preview and the PDF use the same line and total calculation (§5.1), so they cannot disagree on amounts. Checked against the reference PDFs in `export/reference_invoices/`. Open: keep the saved PDF when an invoice is later reopened and changed (warn or overwrite)? | ReportLab; generate on request and save a copy named by invoice number |
 | 13 | **Decided: app configuration lives in `settings.json`, not in the database.** The database holds master data and transactions only. `settings.json` sits next to the `data` folder (`WINE_SETTINGS_PATH` overrides) and holds the four Access settings: `invoice_address`, `invoice_bank_details`, `invoice_payment_terms` (text printed on invoices) and `invoice_pdf_folder` (machine-specific). The import writes it from `tSettings` and the audit compares every value. **Planned in migration 002:** copy the three invoice texts onto each invoice record, so the records carry themselves; until then the file holds them as the defaults for new invoices. A backup is therefore the `data` folder plus `settings.json` | Done as described |
+| 14 | **Decided: three additive columns outside the 1:1 copy** (`Design_Evaluation.md`, M14 and M15), because this data can not be rebuilt later. (a) `stock_transactions.movement_type`: the cause of a stock change, picked on the stock change screen (purchase, count, transfer, write-off, sample, other; "other" needs a comment). (b) `recorded_at` on `stock_transactions`, `invoice_header` and `invoice_lines`: the time the program wrote the row, set by the program and never edited. (c) `invoice_header.closed_at`: the time the invoice was closed, set at each close. All three are NULL on rows from Access and are required on new rows only (validate on write). They come in a numbered migration after `001`. The Access import still loads into the 1:1 schema of version 1, and the program then upgrades the file. Today `connect()` always upgrades to the newest version and the import refuses any version but 1, so the import needs a way to stop at version 1 | Build with steps 6 and 7 |
 
 Risks:
+- **Old data copy:** the counts and data facts in this document (row counts, sums, orphan rows, negative stock) come from an export whose last row is from January 2015. The live Access file is newer. The import and its audit do not depend on these numbers. The acceptance checks in §8 that quote them must be repeated on a current copy before release.
 - **Rounding:** VBA `Round` rounds half to even; Python's `round` does too and matched all 665 lines, but keep the golden test, since a switch to `Decimal` or another rounding rule would break it silently.
 - **One user at a time:** the SQLite file must be used by a single program instance on a local disk. A second instance gets "database is locked" on write, and the file must not sit in a synced folder (Dropbox, OneDrive) while the app runs, which can corrupt it. Back up by copying the file while the app is closed.
 - **Collation:** `NOCASE` folds ASCII only. `Ø` and `ø` compare as different inside SQL, so Python-side matching is used where Danish letters matter.
