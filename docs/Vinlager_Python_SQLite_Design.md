@@ -1,12 +1,12 @@
 # Vinlager – Python + SQLite: Design and Implementation Plan (v1)
 
-Follows `Vinlager_Python_Rebuild_Plan.md` (self-contained app, SQLite, logic in Python, one-time migration, Access only as archive). An earlier draft of this document used MySQL by mistake; the database is **SQLite**, a single local file the app creates itself.
+Follows `Vinlager_Python_Rebuild_Plan.md` (not in this repository: it is in the `docs` folder of the Access decomposition named below; its principles are repeated in §2) (self-contained app, SQLite, logic in Python, one-time migration, Access only as archive). An earlier draft of this document used MySQL by mistake; the database is **SQLite**, a single local file the app creates itself.
 Project root: `A:\Development\WineInventoryManager` (this repo). The Access decomposition is the read-only source in `A:\Development\WineDB_py\WineDB_work` (all `export/...` and `scripts/...` paths below are relative to that folder).
 Sources: `export/schema.txt`, `export/code/*.vba.txt`, `export/modules/*`, `export/queries_sql.txt`, `export/forms/*`, `export/csv/*`, `export/data_quality_report.txt`, `scripts/check_rabat.py`.
 
 ## 1. Scope
 
-**In v1 (built):**
+**In scope for v1** (what is built so far is in [Functionality.md](Functionality.md)):
 1. Main menu (replacement for `fNavigation`).
 2. Stock change input (replacement for `fVinlager_Change`).
 3. Invoice input: header (`fFaktura`) and sale lines (`fVinlager_Salg`), including closing an invoice.
@@ -20,7 +20,7 @@ Sources: `export/schema.txt`, `export/code/*.vba.txt`, `export/modules/*`, `expo
 - **All logic in Python:** price/VAT/discount maths, stock on hand, defaults, validation, workflow.
 - **No FKs in v1 on purpose.** Access enforced none, and the data has orphans (4 invoices point to customer 0: ids 6, 54, 59, 108). FKs would block the 1:1 load.
 - **Plain SQL, no ORM.** Python's built-in `sqlite3` with parameterised queries.
-- **UI separated from logic:** the UI only calls functions in `stock.py` / `invoice_header.py`, so the toolkit can be replaced.
+- **UI separated from logic:** the UI only calls functions in `stock.py` / `invoices.py`, so the toolkit can be replaced.
 
 ## 3. Stack (decisions)
 
@@ -35,7 +35,7 @@ Sources: `export/schema.txt`, `export/code/*.vba.txt`, `export/modules/*`, `expo
 ## 4. Data model (1:1 copy)
 
 Type mapping (SQLite): AutoNumber → `INTEGER PRIMARY KEY AUTOINCREMENT` (ids are never reused, and explicit ids can be inserted by the migration); Long/Integer → `INTEGER`; Text and Memo → `TEXT` (the Access length limits are not enforced); Yes/No → `INTEGER` 0/1; Date/Time → `TEXT` in ISO form `YYYY-MM-DD HH:MM:SS` (the exact format of the CSV export, and it sorts correctly); Double and Single → `REAL` (8-byte, so exported values like `120.7575` load unchanged).
-**Tables and columns are renamed to English** (snake_case, ASCII, no reserved words; tables use descriptive English names such as `items`, `invoice_header`, `invoice_lines`; the Access name stays visible in §4.1 and `TABLE_MAP`). Only names change: data values (`Standard`, `Alm`, `Rød`, country names, settings keys like `<fakt_adr>`) are loaded as they are. The full mapping is in §4.1 and in `migrate/column_map.py`, which is the single source of truth for the DDL and the migration module.
+**Tables and columns are renamed to English** (snake_case, ASCII, no reserved words; tables use descriptive English names such as `items`, `invoice_header`, `invoice_lines`; the Access name stays visible in §4.1 and `TABLE_MAP`). Only names change: data values (`Standard`, `Alm`, `Rød`, country names, settings keys like `<fakt_adr>`) are loaded as they are. The full mapping is in §4.1 and in `migrate/column_map.py`, which is the single source of truth for the names. The DDL itself is `winedb/migrations/001_init.sql`; a test checks that its tables and columns equal the mapping.
 
 ```sql
 CREATE TABLE warehouses (
@@ -212,7 +212,9 @@ WineInventoryManager/   # project root
   data/                # SQLite file, created on first start, git-ignored
   winedb/
     config.py        # database path (WINE_DB_PATH or default)
-    db.py            # connect() = create-if-missing + migrations (§4.2), query(), execute(), transaction()
+    db.py            # connect() = create-if-missing + migrations (§4.2); a transaction() helper is added
+                     #   with the first write function (step 4 onwards), not built yet
+    settings.py      # settings.json (decision 13)
     migrations/      # 001_init.sql (§4), then 002_..., numbered
     logic.py         # pure functions: line_amounts(), default_cost(), (no DB access)
     stock.py         # on_hand(), add_movement(), recent_movements()
@@ -254,7 +256,7 @@ From the Access app, in rough priority: invoice **PDF** (`rFaktura`; spec `expor
 - **Cheap rules for v1 so the later change stays small:**
   1. Keep `item_code` unique (it is, `CREATE UNIQUE INDEX`) and show it in wine pickers and lists next to the name.
   2. Resolve a wine from a typed code in **one** function (`find_item_by_code`), and never hard-code identity values or assume ids are consecutive or meaningful.
-  3. Keep each relation lookup (`item_id`, `customer_id`, `warehouse_id` joins) in the `stock.py` / `invoice_header.py` data functions, not in the UI.
+  3. Keep each relation lookup (`item_id`, `customer_id`, `warehouse_id` joins) in the `stock.py` / `invoices.py` data functions, not in the UI.
 - **How the change is made later:** one numbered migration per dimension (§4.2): add the business key column, backfill and check it is unique and not empty, add the unique index, add the new key column to the child tables, fill it by joining on the old id, then rebuild the tables without the old column. The golden tests (§8 step 4) must give identical results before and after.
 - **Open (not for v1):** which dimensions get a key and what it looks like (customer number? warehouse code?); whether the business key should become the primary key itself or stay a unique alternate key; how to handle codes users want to rename after history exists (history must keep pointing at the same wine).
 
