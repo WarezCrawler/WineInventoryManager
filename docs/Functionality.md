@@ -17,7 +17,7 @@ Status: **Done** = built, **v1** = planned for the first release, **Later** = ba
 - 1.8 Quit: **v1**
 
 ## 2. Stock adjustment (§6.2, §5.3)
-- 2.1 Add or remove stock for a wine and warehouse (signed quantity, comment, date): **v1**
+- 2.1 Add or remove stock for a wine and warehouse (type of change, signed quantity, comment, date): **v1**
 - 2.2 Show current stock and stock after the change, and the latest movements: **v1**
 - 2.3 Import new stock from a file: **Later**
 - 2.4 Structured stock count: a count session per warehouse, counted quantity per wine, differences shown and booked in one step (after the stock ledger, see [Design_Evaluation.md](Design_Evaluation.md) step 2b.1): **Later**
@@ -25,7 +25,7 @@ Status: **Done** = built, **v1** = planned for the first release, **Later** = ba
 ## 3. Manage open invoices
 - 3.1 Create an invoice and edit its header: **v1** (§6.3)
 - 3.2 Add and edit invoice lines with live price, VAT and discount calculation: **v1** (§5.1, §6.4)
-- 3.3 Close an invoice (it becomes read-only): **v1**
+- 3.3 Close an invoice (it becomes read-only; the closing time is recorded): **v1**
 - 3.4 Soft delete an invoice (flagged, never removed): **v1**
 
 ## 4. Closed invoices

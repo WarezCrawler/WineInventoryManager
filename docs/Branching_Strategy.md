@@ -30,7 +30,7 @@ Large planned changes (for example the stock ledger) are cut into steps. Each st
 2. Open a pull request **`develop` → `main`**. Title: `Release vX.Y.Z`.
 3. Merge it with a **merge commit, not a squash.** A squash makes `main` and `develop` differ in history, and `develop` then looks "ahead" forever.
 4. Tag the merge commit on `main`: `vX.Y.Z`. Build the program from the tag.
-5. `develop` needs no reset. It already contains everything in `main`.
+5. `develop` needs no reset. It already has all the content of `main`. GitHub shows `main` as one commit ahead after a release: that is the merge commit itself. It is harmless.
 
 ## 4. Hotfix
 
@@ -48,6 +48,7 @@ Migrations are numbered, so two branches can use the same number.
 - A migration that is **only in `develop`** is not released. It may be edited or merged with another until the release. This is the exception that makes planned schema work cheap.
 - A **hotfix should not change the schema.** If it must, it takes the next free number. When `main` is merged back into `develop`, the clashing `develop` migration is renumbered **before** any release, and never after.
 - After a release the database of a user has been upgraded. From that point the migration is frozen.
+- **Never open the live database with a `develop` build.** A `develop` build upgrades the file to a schema that is not released. The released program then refuses to open it, and only the backup copy brings it back. Always test on a copy.
 
 ## 6. Release checks
 
@@ -60,10 +61,10 @@ Before the release pull request:
 
 ## 7. Settings to change (repository and CI)
 
-1. **Create `develop` from `main`** and protect it like `main`: pull request required, `test` check required. The API check on 2026-11-15 shows no classic branch protection on `main`. Check Settings → Rules for a ruleset, and add one for both branches if none exists.
-2. **Allow merge commits** in the repository settings. Today only squash is allowed, so a release pull request cannot be merged as in section 3. Keep squash for feature branches by habit, or restrict it with the rules.
+1. **Create `develop` from `main` and protect it before the first release pull request.** Checked on 2026-11-15: one ruleset ("main: squash pull requests only") protects the default branch only. It blocks deletion and force push, requires a pull request and the `test` check, and allows squash merges only. `develop` is not covered. This matters: GitHub deletes the head branch of a merged pull request, and for a release pull request the head branch is `develop`. Add `develop` to the ruleset, or make a second ruleset for it with the same rules.
+2. **Allow merge commits in two places.** The repository setting allows squash only, and the ruleset on `main` allows squash only. Both must also allow a merge commit. Without this, a release pull request can not be merged as in section 3. A squash release is not a substitute: after it, `main` does not have the commits of `develop`, and the next release pull request can give conflicts wherever the same lines changed both before and after the release. On `develop`, allow squash (features) and merge commit (the merge back after a hotfix).
 3. **CI trigger:** `pull_request` already covers any target branch. Add `develop` to the `push` trigger, so the check also runs after a merge (done in `ci.yml`).
-4. **Keep "delete branch on merge"** on. It is already on. It must not delete `develop`: protected branches are not deleted.
+4. **Keep "delete branch on merge"** on. It is already on. It does not delete a branch that a ruleset protects against deletion, which is why item 1 comes first.
 5. **Default branch:** keep `main`. A visitor of the public repository then sees the released version.
 
 ## 8. Alternatives (rejected for now)
