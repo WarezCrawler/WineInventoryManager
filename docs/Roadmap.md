@@ -27,7 +27,8 @@ This page shows the plan on one page: what each version contains, in which order
 | 6 | Stock change screen (the fields of the Access form) and mass stock registration (the Access "Import vinlager tilgange/afgange" grid) | In progress |
 | 7 | Invoice header screen (create, edit, delete flag, close) | Not started |
 | 8 | Invoice lines screen | Not started |
-| 9 | End-to-end test and parallel run with Access | Not started |
+| 9 | Invoice preview and PDF (replaces the Access report `rFaktura`) | Not started |
+| 10 | End-to-end test and parallel run with Access | Not started |
 | Release | Import the **live** Access file (the test data ends in January 2015), repeat the checks, rehearse on a copy ([Branching_Strategy.md §6](Branching_Strategy.md)) | Not started |
 
 ### Differences from Access in version 1
@@ -37,12 +38,14 @@ Version 1 copies Access, but not exactly. Each difference below is either decide
 | # | Difference | Why | Status |
 |---|---|---|---|
 | 1 | The UI is in British English, not Danish. The data stays as it is. | Your decision | Done |
-| 2 | Settings are in `settings.json`, not in a table. | Configuration is not business data | Done |
+| 2 | Settings are in `settings.json`, not in a table. The database and `settings.json` stay next to the program. | Configuration is not business data; owner decision 2026-11-21 | Done |
 | 3 | The open-invoice list also shows invoices without a customer, as "(no customer)". Access hid them. | So these drafts can be finished or deleted | Done (default of decision 2) |
 | 4 | Stock leaves out the lines of soft-deleted invoices. Access counted them. | Your rule: calculations leave out flagged rows. No effect on the current data. | Done |
 | 5 | A new invoice must have a customer. Access allowed customer 0. | Prevents new drafts without a customer | Planned, step 7 |
 | 6 | The invoice date is filled in with today. Access left it blank. | Default of decision 3 | Planned, step 7 |
 | 7 | Inputs are checked when saved (for example: the quantity must be a whole number other than 0). Old rows are never checked. | Prevents new bad data | In step 6 |
+| 8 | The stock change picker hides discontinued wines whose total stock is 0, and marks the others "(discontinued)". Access listed all wines. | Fewer wrong picks; stock on a discontinued wine can still be corrected | Done (owner decision) |
+| 9 | Mass stock registration also accepts the wine code, not only the wine id. | Users know the code better | Done (owner decision) |
 **Rule for version 1 (owner, 2026-11-21): keep data transformations to a minimum.** The data is loaded 1:1 and the schema does not change after `001_init.sql`. The screens store only the fields that the Access forms stored. So these planned additions **moved to version 2**:
 
 - **Type of change** on each stock movement (purchase, count, transfer, write-off, sample, other). In version 1 the cause stays in the free-text comment, as in Access.
@@ -52,25 +55,24 @@ Version 1 copies Access, but not exactly. Each difference below is either decide
 
 The effect: in step 2b, the mapping from comment to type of change must also cover the stock movements entered with version 1.
 
-**Note:** version 1 has **no invoice PDF and no printing.** In Access, the invoice report (`rFaktura`) is part of the daily work. Decide whether version 1 can go live without it, or whether the invoice PDF moves into version 1.
+**Invoice PDF:** in version 1, step 9 (owner decision, 2026-11-21). In Access, the invoice report (`rFaktura`) is part of the daily work.
 
 ## Version 1.x: the rest of the Access functions
 
 The Access functions that are not in version 1, in about this order of priority ([design doc §9](Vinlager_Python_SQLite_Design.md)):
 
-1. Invoice PDF
-2. Reopen a closed invoice
-3. Copy an invoice
-4. Customer maintenance and mailing list export
-5. Wine list maintenance
-6. Sales and cost price lists
-7. Warehouse master data
-8. Settings screen
-9. Stock report and customer list
-10. Excel export
-11. Consistency check query
+1. Reopen a closed invoice
+2. Copy an invoice
+3. Customer maintenance and mailing list export
+4. Wine list maintenance
+5. Sales and cost price lists
+6. Warehouse master data
+7. Settings screen
+8. Stock report and customer list
+9. Excel export
+10. Consistency check query
 
-The stock import (mass registration) moved into version 1, step 6.
+The stock import (mass registration) moved into version 1, step 6, and the invoice PDF into step 9.
 
 ## Version 2: modules and a real stock ledger
 

@@ -2,8 +2,8 @@
 from nicegui import ui
 
 from winedb.db import connect
-from winedb.masterdata import get_item, list_items, list_warehouses
-from winedb.stock import add_movement, on_hand, recent_movements
+from winedb.masterdata import get_item, list_warehouses
+from winedb.stock import add_movement, on_hand, recent_movements, wines_for_stock_change
 from winedb.ui.labels import label
 from winedb.validation import ValidationError, now_text
 
@@ -12,9 +12,11 @@ HISTORY_COLUMNS = ("created_at", "quantity", "comment")
 
 
 def _item_text(item: dict) -> str:
-    """The text of a wine in the wine picker: code, name and vintage, then type and size."""
+    """The text of a wine in the wine picker: code, name and vintage, then type and size, then a
+    marker if the wine is discontinued."""
     extra = ", ".join(str(item[c]) for c in ("item_type", "bottle_size") if item[c])
-    return f"Code {item['item_code']} – {item['name']} {item['vintage']}" + (f" ({extra})" if extra else "")
+    text = f"Code {item['item_code']} – {item['name']} {item['vintage']}" + (f" ({extra})" if extra else "")
+    return text + (" (discontinued)" if item.get("is_discontinued") else "")
 
 
 def _whole_number(value) -> int | float | None:
@@ -25,7 +27,7 @@ def _whole_number(value) -> int | float | None:
 def stock_change_page():
     conn = connect()
     try:
-        items = list_items(conn)
+        items = wines_for_stock_change(conn)
         warehouses = list_warehouses(conn)
     finally:
         conn.close()

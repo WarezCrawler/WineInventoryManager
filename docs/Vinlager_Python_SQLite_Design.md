@@ -26,6 +26,7 @@ The plan follows [access-analysis/Vinlager_Python_Rebuild_Plan.md](access-analys
 1. Main menu (replaces the Access form `fNavigation`).
 2. Stock change screen (replaces `fVinlager_Change`).
 3. Invoice screens: the invoice header (`fFaktura`) and the invoice lines (`fVinlager_Salg`), including closing an invoice.
+4. Invoice preview on screen and invoice PDF (replaces the Access report `rFaktura`; moved into v1 by the owner, 2026-11-21).
 
 **Not in v1:** the backlog in §9. v1 does not improve the data model: it copies the tables and columns 1:1.
 
@@ -235,7 +236,8 @@ The title is "Wine Inventory Manager". On the left is the list of **open invoice
 | Invoice details (opens the header of the selected invoice; if no invoice is selected, a new one) | Åben faktura egenskaber | **yes** |
 | Stock change (new entry) | Open Vinlager tilgange/afgange | **yes** |
 | Mass stock registration (§6.2.1) | Import vinlager tilgange/afgange | **yes** |
-| Maintain customers, Customer list, Reopen closed invoice, Generate invoice, Wine list, Sales price list, Cost price list, Warehouses, Stock report, Advanced settings, Export mailing list | Vedligehold Kundedata, List Kunder, Gen­åben lukkede faktura, Generer Faktura, Vinliste, Prisliste Salg, Prisliste Cost, Open Lager Stamdata, Vis lagerrapport, Show advanced settings, Mail Liste Export | shown disabled (backlog) |
+| Generate invoice (preview and PDF, step 9) | Generer Faktura | **yes** (shown disabled until step 9) |
+| Maintain customers, Customer list, Reopen closed invoice, Wine list, Sales price list, Cost price list, Warehouses, Stock report, Advanced settings, Export mailing list | Vedligehold Kundedata, List Kunder, Gen­åben lukkede faktura, Vinliste, Prisliste Salg, Prisliste Cost, Open Lager Stamdata, Vis lagerrapport, Show advanced settings, Mail Liste Export | shown disabled (backlog) |
 | Quit | Quit | yes |
 
 In Access, the open-invoice list uses an **inner join to the customers**, so the 4 draft invoices with customer `0` do not show. The new app uses a **left join** (the default of decision 2 in §10) and shows "(no customer)", so the user can finish or delete these drafts.
@@ -252,7 +254,7 @@ The user fills in the fields in this order:
 4. Comment.
 5. Date (default now).
 
-These are the fields of the Access form; version 1 adds none (decision 14 in §10). The wine picker starts each row with the wine code (`item_code`, Access `Vin_UID`), for example "Code SAbSe_RA09 – Seleccion Personal 2009 (Rød, Alm)". It lists all wines, also discontinued ones, as the Access form did.
+These are the fields of the Access form; version 1 adds none (decision 14 in §10). The wine picker starts each row with the wine code (`item_code`, Access `Vin_UID`), for example "Code SAbSe_RA09 – Seleccion Personal 2009 (Rød, Alm)". It lists the wines that Access listed, with one difference (owner decision, 2026-11-21): a discontinued wine whose stock over all warehouses is 0 is hidden. A discontinued wine with stock (also negative stock) stays, marked "(discontinued)", after the active wines, so that its stock can still be corrected. The rule is `stock.wines_for_stock_change()`. Mass registration (§6.2.1) accepts every wine.
 
 Then the user clicks **Save** or **Cancel**. While the user types, the screen shows the on-hand stock now and after the change. Below the fields, it shows the 20 latest stock movements for the selected wine and warehouse.
 
@@ -330,25 +332,26 @@ Do the steps in order. Each step has a check; the step is complete when the chec
    *Check:* create an invoice, change it, set the delete flag and close it. The row in `invoice_header` is the same as Access would store it.
 8. **Invoice lines screen** (§5.2, §6.4).
    *Check:* enter three historical invoices again: one with a `discount`, one with 0% VAT and one with a negative quantity. The new invoice lines have the same values as the stored ones. Closed invoices are read-only.
-9. **End-to-end test and parallel run.** Use a copy of the database after the Access import. Enter the same new invoice and the same stock change in Access and in the new app, then compare the stored rows.
+9. **Invoice preview and PDF** (decision 12 in §10, replaces `rFaktura`). The preview on screen and the PDF use the line and total calculation of §5.1. The PDF is made directly with ReportLab and saved to the PDF folder from `settings.json`. The texts (address, bank details, payment terms) come from `settings.json` when the PDF is made; the saved PDF keeps them.
+   *Check:* for each reference invoice in `export/reference_invoices/`, the new PDF shows the same lines, totals and texts.
+10. **End-to-end test and parallel run.** Use a copy of the database after the Access import. Enter the same new invoice and the same stock change in Access and in the new app, then compare the stored rows.
 
 The numbers in the checks come from an old copy of the Access data (see "Old copy of the data" under Risks in §10).
 
 ## 9. Backlog (not in v1)
 
-These functions of the Access app come after v1, in about this order of priority:
+These functions of the Access app come after v1, in about this order of priority. The invoice PDF moved into v1 (step 9). Specification: `export/report_spec/rFaktura.spec.json`; reference PDFs: `export/reference_invoices/`.
 
-1. **Invoice PDF** (`rFaktura`). The specification is `export/report_spec/rFaktura.spec.json`; the reference PDFs are in `export/reference_invoices/`.
-2. **Reopen a closed invoice** (`fFaktura_genåben`).
-3. **Copy an invoice** (`DBCopyFakt`). It copies the header with a new customer, today's date, and `is_closed`, `warehouse_id` and `hide_subtotals`. It copies the invoice lines with today's date.
-4. **Customer maintenance** and **mail list export.** The export selects customers with `on_mailing_list = 1 AND is_hidden = 0 AND email <> ''`; 128 customers match.
-5. **Wine list maintenance**, with the value lists for type (`Rød;Hvid;Rose;Desert;Mousserende`) and bottle size (`Alm;Halv;Magnum;Db. Mgm;50 cl.`). Note that the data uses `MGM` and `DMGM`.
-6. **Price lists** for sales and cost.
-7. **Warehouse** master data.
-8. **Settings screen** for `settings.json`, including the PDF folder.
-9. **Stock report** (`qVinliste`) and **customer list** (`rKundeListe`).
-10. **Excel export** (`uVinlager_Excel`).
-11. **Consistency check query.**
+1. **Reopen a closed invoice** (`fFaktura_genåben`).
+2. **Copy an invoice** (`DBCopyFakt`). It copies the header with a new customer, today's date, and `is_closed`, `warehouse_id` and `hide_subtotals`. It copies the invoice lines with today's date.
+3. **Customer maintenance** and **mail list export.** The export selects customers with `on_mailing_list = 1 AND is_hidden = 0 AND email <> ''`; 128 customers match.
+4. **Wine list maintenance**, with the value lists for type (`Rød;Hvid;Rose;Desert;Mousserende`) and bottle size (`Alm;Halv;Magnum;Db. Mgm;50 cl.`). Note that the data uses `MGM` and `DMGM`.
+5. **Price lists** for sales and cost.
+6. **Warehouse** master data.
+7. **Settings screen** for `settings.json`, including the PDF folder.
+8. **Stock report** (`qVinliste`) and **customer list** (`rKundeListe`).
+9. **Excel export** (`uVinlager_Excel`).
+10. **Consistency check query.**
 
 (The stock import, `qVinlager_Change_Import`, moved into version 1 as the mass stock registration, §6.2.1.)
 
@@ -388,9 +391,10 @@ These functions of the Access app come after v1, in about this order of priority
 | 9 | Access stores "no value" in lookup columns in two ways: as `0` (`invoice_header.customer_id` in 4 rows, `invoice_lines.warehouse_id` in 2 rows of the snapshot) and as NULL (`invoice_header.warehouse_id` in 3 rows). The Access import keeps both as they are. Should one explicit step after the import change 0 to NULL, and report each change, so that NULL is the only "no value"? | Keep as loaded; decide before the first release |
 | 10 | Access creates the invoice first and assigns the customer later; this is why some invoices have customer 0. The new app may change this process, so that the user picks the customer when the invoice is created. | Same as Access in v1; redesign later |
 | 11 | **Decided: rows are never deleted.** If a delete function exists, it is a soft delete: it sets a flag and the row stays. Access could delete rows but never offered it in the UI, and only invoices had a flag (`invoice_header.is_deleted`). So v1 has no delete function except the invoice flag, and no flag columns on other tables. **Open:** the "Delete line" button in §6.4. Did the Access line form have it? How does a user correct a wrong invoice line? | Soft delete for invoices only. If another delete function is designed, add a flag with a new schema migration. |
-| 12 | Invoice output. **Decided:** the app shows the invoice in an on-screen **preview**, which does not have to look exactly like the PDF. **Proposed:** ReportLab (pure Python, works in the packaged `.exe`, no printing step) makes the PDF directly from the data. The app saves it to the PDF folder from `settings.json` and opens it in the default viewer. The preview and the PDF use the same line and total calculation (§5.1), so their amounts are always the same. The PDFs are checked against the reference PDFs in `export/reference_invoices/`. **Open:** when a user reopens and changes an invoice, should the app warn about the saved PDF or overwrite it? | ReportLab; make the PDF when the user asks for it, and save a copy named by invoice number |
+| 12 | Invoice output. **In version 1, step 9 (owner, 2026-11-21).** **Decided:** the app shows the invoice in an on-screen **preview**, which does not have to look exactly like the PDF. **Proposed:** ReportLab (pure Python, works in the packaged `.exe`, no printing step) makes the PDF directly from the data. The app saves it to the PDF folder from `settings.json` and opens it in the default viewer. The preview and the PDF use the same line and total calculation (§5.1), so their amounts are always the same. The PDFs are checked against the reference PDFs in `export/reference_invoices/`. **Open:** when a user reopens and changes an invoice, should the app warn about the saved PDF or overwrite it? | ReportLab; make the PDF when the user asks for it, and save a copy named by invoice number |
 | 13 | **Decided: the app configuration is in `settings.json`, not in the database.** The database holds only master data and transactions. `settings.json` is next to the `data` folder (`WINE_SETTINGS_PATH` overrides the location). It holds the four Access settings: `invoice_address`, `invoice_bank_details` and `invoice_payment_terms` (text printed on invoices) and `invoice_pdf_folder` (different on each machine). The Access import writes the file from `tSettings`, and the check against the source compares every value. **Planned after version 1** (with the invoice PDF): copy the three invoice texts onto each invoice record, so that each invoice keeps its own texts. Version 1 makes no schema change after `001`, so until then the file holds the texts for all invoices. A backup must therefore include the `data` folder and `settings.json`. | Done as described |
 | 14 | **Changed 2026-11-21 (owner): moved to version 2.** Version 1 keeps data transformations to a minimum: no schema change after `001`. Version 1 stores only the Access fields; the cause of a stock change stays in the free-text comment, as in Access. The step 2b mapping from comment to type (`Design_Evaluation.md`) therefore also covers the rows entered with version 1. Originally decided: three new columns outside the 1:1 copy (`Design_Evaluation.md`, M14 and M15), because this data cannot be added later. (a) `stock_transactions.movement_type`: the cause of a stock change, which the user picks on the stock change screen (purchase, count, transfer, write-off, sample, other; "other" needs a comment). (b) `recorded_at` on `stock_transactions`, `invoice_header` and `invoice_lines`: the time when the program wrote the row. The program sets it, and nobody can edit it. (c) `invoice_header.closed_at`: the time when the invoice was closed, set at each close. All three are NULL on rows from Access, and are required only on new rows (validate on write). A numbered schema migration after `001` adds them. The Access import still loads into the 1:1 schema of version 1, and then the program upgrades the file. **Gap for version 2:** `connect()` always upgrades to the newest version, and the import refuses all versions except 1. When the first new migration comes, the import needs a way to stop at version 1, or the import must be retired first. | Version 2 (step 2b) |
+| 15 | **Decided (owner, 2026-11-21): the data stays next to the program.** The database (`data\`) and `settings.json` stay in the program folder, as today; no separate data folder. `build.ps1` keeps both during a build. | Done as described |
 
 **Risks:**
 - **Old copy of the data:** the numbers and data facts in this document (row counts, sums, orphan rows, negative stock) come from an export whose last row is from January 2015. The live Access file is newer. The import and its check against the source do not depend on these numbers. But repeat the checks in §8 that quote them on a current copy before the release.

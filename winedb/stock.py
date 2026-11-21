@@ -2,31 +2,61 @@
 import sqlite3
 
 from winedb.db import transaction
+from winedb.masterdata import list_items
 from winedb.validation import ValidationError, is_timestamp, now_text
 
 
-def on_hand(conn: sqlite3.Connection, item_id: int, warehouse_id: int) -> int:
-    """Return the on-hand stock of one wine in one warehouse (design doc §5.3).
+# The on-hand formula (design doc §5.3), in one place: stock movements count with their sign, invoice
+# lines count negative. Lines of soft-deleted invoices are left out.
+_ON_HAND = """
+    SELECT item_id, warehouse_id, SUM(quantity) AS on_hand FROM (
+        SELECT item_id, warehouse_id, COALESCE(quantity, 0) AS quantity FROM stock_transactions
+        UNION ALL
+        SELECT l.item_id, l.warehouse_id, -COALESCE(l.quantity, 0) FROM invoice_lines AS l
+            LEFT JOIN invoice_header AS h ON h.invoice_id = l.invoice_id
+            WHERE COALESCE(h.is_deleted, 0) = 0
+    ) {where} GROUP BY item_id, warehouse_id"""
 
-    On-hand stock = the sum of all stock movements − the sum of all invoice line quantities, for
-    this wine and warehouse. This function is the only place that knows the formula.
+
+def on_hand_table(conn: sqlite3.Connection, item_id: int | None = None) -> dict[tuple[int, int], int]:
+    """Return the on-hand stock of every (wine, warehouse) pair that has rows, or only of one wine.
+
+    On-hand stock = the sum of all stock movements − the sum of all invoice line quantities. This
+    function is the only place that knows the formula; on_hand() and on_hand_by_item() use it.
 
     Lines of soft-deleted invoices (`is_deleted = 1`) are left out. Access counted them
     (`TotalVinQ` uses `uVinlager`); the difference is deliberate, because calculations must leave
     out flagged invoices. Lines whose invoice row does not exist still count, as in Access.
     A NULL quantity counts as 0. The result can be negative: the app shows that and never blocks it.
     """
-    moved = conn.execute(
-        "SELECT COALESCE(SUM(quantity), 0) FROM stock_transactions WHERE item_id = ? AND warehouse_id = ?",
-        (item_id, warehouse_id),
-    ).fetchone()[0]
-    sold = conn.execute(
-        "SELECT COALESCE(SUM(l.quantity), 0) FROM invoice_lines AS l"
-        " LEFT JOIN invoice_header AS h ON h.invoice_id = l.invoice_id"
-        " WHERE l.item_id = ? AND l.warehouse_id = ? AND COALESCE(h.is_deleted, 0) = 0",
-        (item_id, warehouse_id),
-    ).fetchone()[0]
-    return moved - sold
+    where, params = ("WHERE item_id = ?", (item_id,)) if item_id is not None else ("", ())
+    return {(r[0], r[1]): r[2] for r in conn.execute(_ON_HAND.format(where=where), params)}
+
+
+def on_hand(conn: sqlite3.Connection, item_id: int, warehouse_id: int) -> int:
+    """Return the on-hand stock of one wine in one warehouse (design doc §5.3); 0 if it has no rows."""
+    return on_hand_table(conn, item_id).get((item_id, warehouse_id), 0)
+
+
+def on_hand_by_item(conn: sqlite3.Connection) -> dict[int, int]:
+    """Return the on-hand stock of each wine over all warehouses. Wines without rows are not in it."""
+    totals: dict[int, int] = {}
+    for (item_id, _), quantity in on_hand_table(conn).items():
+        totals[item_id] = totals.get(item_id, 0) + quantity
+    return totals
+
+
+def wines_for_stock_change(conn: sqlite3.Connection) -> list[dict]:
+    """Return the wines that the stock change screen offers (owner decision, 2026-11-21).
+
+    All wines, as in Access, except discontinued wines whose stock over all warehouses is 0: they are
+    hidden. A discontinued wine with stock (also negative stock) stays, so that it can be corrected.
+    Active wines come first, then the discontinued ones; each group is sorted by code. Each wine has
+    `on_hand_total`. Mass registration does not use this list: it accepts every wine by id or code."""
+    totals = on_hand_by_item(conn)
+    wines = [{**item, "on_hand_total": totals.get(item["item_id"], 0)} for item in list_items(conn)]
+    shown = [w for w in wines if not (w["is_discontinued"] and w["on_hand_total"] == 0)]
+    return sorted(shown, key=lambda w: (bool(w["is_discontinued"]), (w["item_code"] or "").casefold()))
 
 
 def _check(conn: sqlite3.Connection, item_id, warehouse_id, quantity, comment, created_at):

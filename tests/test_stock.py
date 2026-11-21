@@ -110,3 +110,31 @@ def test_recent_movements_newest_first(master):
     # Newest first; rows without a date (the fixture has one: 5) come last, newest of them first.
     assert [r["quantity"] for r in rows] == [-1, 12, 1, 5]
     assert len(recent_movements(master, 11, 1, limit=2)) == 2
+
+
+# --- wines offered on the stock change screen (owner decision 2026-11-21) ---
+
+from winedb.stock import on_hand_by_item, on_hand_table, wines_for_stock_change  # noqa: E402
+
+
+def test_on_hand_table_and_totals_use_the_same_formula(conn):
+    table = on_hand_table(conn)
+    assert table[(10, 1)] == on_hand(conn, 10, 1) == -1 and table[(10, 2)] == 46 and table[(11, 1)] == 5
+    assert on_hand_by_item(conn) == {10: 45, 11: 5}
+
+
+def test_discontinued_wines_without_stock_are_hidden(conn):
+    conn.executescript("""
+        INSERT INTO items (item_id, item_code, name, vintage, is_discontinued) VALUES
+            (10, 'b_active', 'A', 2010, 0),
+            (11, 'C_GONE_WITH_STOCK', 'B', 2011, 1),
+            (12, 'A_GONE_EMPTY', 'C', 2012, 1),
+            (13, 'D_GONE_NEGATIVE', 'D', 2013, 1),
+            (14, 'a_active_empty', 'E', 2014, 0),
+            (15, 'E_GONE_NETS_TO_ZERO', 'F', 2015, 1);
+        INSERT INTO stock_transactions (item_id, warehouse_id, quantity) VALUES (13, 1, -2), (15, 1, 5), (15, 2, -5);
+    """)
+    wines = wines_for_stock_change(conn)
+    # Active wines first (by code, ignoring case), then discontinued wines with stock other than 0.
+    assert [w["item_code"] for w in wines] == ["a_active_empty", "b_active", "C_GONE_WITH_STOCK", "D_GONE_NEGATIVE"]
+    assert [w["on_hand_total"] for w in wines] == [0, 45, 5, -2]

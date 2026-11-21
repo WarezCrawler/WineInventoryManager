@@ -25,6 +25,9 @@ def db(tmp_path, monkeypatch):
             (1, 7, 0, 0), (2, 7, 1, 0), (3, 0, 0, 0), (4, 7, 0, 1);
         INSERT INTO items (item_id, item_code, name, vintage, item_type, bottle_size, country)
             VALUES (10, 'RA_10', 'Rosso', 2010, 'Rød', 'Alm', 'Italien'), (11, 'BL_11', 'Blanc', 2011, 'Hvid', 'Halv', 'Frankrig');
+        INSERT INTO items (item_id, item_code, name, vintage, is_discontinued)
+            VALUES (20, 'OLD_EMPTY', 'Gone', 2001, 1), (21, '21_fejl', 'Gone with stock', 2002, 1);
+        INSERT INTO stock_transactions (item_id, warehouse_id, quantity) VALUES (21, 2, 30);
         INSERT INTO warehouses (warehouse_id, warehouse_name) VALUES (1, 'Main'), (2, 'Fridge');
         INSERT INTO stock_transactions (item_id, warehouse_id, quantity, comment, created_at)
             VALUES (10, 1, 12, 'Opening', '2013-06-21 00:00:05');
@@ -123,10 +126,13 @@ async def test_stock_change_cancel_returns_to_the_menu(screen: User):
     await screen.should_see("Open invoices")
 
 
-async def test_stock_change_picker_shows_the_code(screen: User):
+async def test_stock_change_picker_shows_the_code_and_hides_discontinued_wines_without_stock(screen: User):
     await screen.open("/stock-change")
     options = element(screen, ui.select, "Wine").options
     assert options[10].startswith("Code RA_10 – Rosso 2010")
+    assert 20 not in options                                          # discontinued, stock 0
+    assert options[21] == "Code 21_fejl – Gone with stock 2002 (discontinued)"
+    assert list(options)[-1] == 21                                    # discontinued wines come last
 
 
 # --- Mass stock registration (step 6, Access "Import vinlager tilgange/afgange") ---
