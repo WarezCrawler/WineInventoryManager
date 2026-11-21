@@ -2,6 +2,7 @@
 an older file is upgraded by the numbered scripts in migrations/ (version = PRAGMA user_version)."""
 import re
 import sqlite3
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -69,3 +70,15 @@ def connect(path: Path | str | None = None, migrations_dir: Path | str = MIGRATI
         conn.close()
         raise
     return conn
+
+
+@contextmanager
+def transaction(conn: sqlite3.Connection):
+    """Run the statements in the `with` block as one transaction: all are saved, or none."""
+    conn.execute("BEGIN")
+    try:
+        yield conn
+    except BaseException:
+        conn.execute("ROLLBACK")
+        raise
+    conn.execute("COMMIT")

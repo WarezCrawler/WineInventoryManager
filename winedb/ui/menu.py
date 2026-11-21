@@ -62,8 +62,7 @@ def menu_page():
             lines_button = ui.button("Open invoice", on_click=open_lines).props("no-caps").classes("w-full")
             ui.button("Invoice details", on_click=open_header).props("no-caps").classes("w-full").tooltip(
                 "The details of the selected invoice. With no invoice selected: a new invoice.")
-            ui.button("Stock change",
-                      on_click=lambda: _not_built("The stock change screen", 6)).props("no-caps").classes("w-full")
+            ui.button("Stock change", on_click=lambda: ui.navigate.to("/stock-change")).props("no-caps").classes("w-full")
             lines_button.bind_enabled_from(table, "selected", backward=bool)
 
             ui.separator()
