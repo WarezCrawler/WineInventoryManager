@@ -19,7 +19,7 @@ Status: **Done** = built, **v1** = planned for the first release, **Later** = ba
 ## 2. Stock adjustment (§6.2, §5.3)
 - 2.1 Add or remove stock for a wine and warehouse (signed quantity, comment, date; the fields of the Access form): **v1**
 - 2.2 Show current stock and stock after the change, and the latest movements: **v1**
-- 2.3 Mass stock registration: paste many stock changes at once (warehouse, wine id or code, quantity, comment), check, then save all or nothing (replaces the Access button "Import vinlager tilgange/afgange", §6.2.1): **v1**
+- 2.3 Mass stock registration: an editable grid; paste many stock changes from Excel or type them (warehouse, wine id or code, quantity, comment), check, then save all or nothing (replaces the Access button "Import vinlager tilgange/afgange", §6.2.1): **v1**
 - 2.4 Structured stock count: a count session per warehouse, counted quantity per wine, differences shown and booked in one step (after the stock ledger, see [Design_Evaluation.md](Design_Evaluation.md) step 2b.1): **Later**
 
 ## 3. Manage open invoices

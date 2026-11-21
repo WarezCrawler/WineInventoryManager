@@ -137,48 +137,96 @@ async def test_stock_change_picker_shows_the_code_and_hides_discontinued_wines_w
 
 # --- Mass stock registration (step 6, Access "Import vinlager tilgange/afgange") ---
 
+TAB, CRLF = chr(9), chr(13) + chr(10)
+
+
+def excel(*lines) -> str:
+    """Text as Excel puts it on the clipboard: tabs between cells, CR LF after each row."""
+    return "".join(TAB.join(str(c) for c in line) + CRLF for line in lines)
+
+
 async def test_menu_mass_registration_button_opens_the_screen(screen: User):
     await screen.open("/")
     screen.find("Mass stock registration").click()
-    await screen.should_see("Paste rows from Excel")
+    await screen.should_see("paste from Excel")
 
 
-async def test_mass_registration_check_then_save_all(screen: User, db):
+def mass_grid(user: User):
+    return user.find(ui.aggrid).elements.pop()
+
+
+def paste(user: User, text: str, row: int = 0, col: str = "warehouse"):
+    """What the browser sends when the user pastes cells from Excel into the grid (see stock_mass.PASTE_JS)."""
+    user.find(ui.aggrid).trigger("paste", {"text": text, "row": row, "col": col})
+
+
+def edit(user: User, line: int, field: str, value):
+    """What AG Grid sends when the user changes a cell."""
+    user.find(ui.aggrid).trigger("cellValueChanged", {"colId": field, "newValue": value, "data": {"line": line}})
+
+
+async def test_mass_registration_paste_from_excel_check_then_save_all(screen: User, db):
     before = rows(db)
     await screen.open("/stock-mass")
     save = element(screen, ui.button, "Save all")
     assert not save.enabled                                   # nothing checked yet
-    element(screen, ui.textarea, "Rows").value = "Lager\tVin\tAntal\tKommentar\n1\tRA_10\t6\tDelivery\n2\t11\t-1\t"
+    paste(screen, excel(("Lager", "Vin", "Antal", "Kommentar"), (1, "RA_10", 6, "Delivery"), (2, 11, -1, "")))
+    grid = mass_grid(screen)
+    assert [(r["warehouse"], r["wine"], r["quantity"]) for r in grid.options["rowData"][:3]] == [
+        ("1", "RA_10", "6"), ("2", "11", "-1"), ("", "", "")]  # heading skipped, filled from the first cell
     screen.find("Check").click()
     await screen.should_see("2 row(s) are correct.")
-    preview = screen.find(ui.table).elements.pop()
-    assert [(r["warehouse"], r["wine"], r["quantity"], r["status"]) for r in preview.rows] == [
-        ("Main", "RA_10 – Rosso 2010", 6, "OK"), ("Fridge", "BL_11 – Blanc 2011", -1, "OK")]
+    data = mass_grid(screen).options["rowData"]
+    assert [(r["warehouse_name"], r["wine_name"], r["status"]) for r in data[:2]] == [
+        ("Main", "RA_10 – Rosso 2010", "OK"), ("Fridge", "BL_11 – Blanc 2011", "OK")]
     assert save.enabled
     screen.find("Save all").click()
     await screen.should_see("Saved 2 stock change(s).")
     new = rows(db)[len(before):]
     assert [r[:4] for r in new] == [(10, 1, 6, "Delivery"), (11, 2, -1, None)]
     assert new[0][4] == new[1][4]                             # one date for the whole batch
+    assert all(r["wine"] == "" for r in mass_grid(screen).options["rowData"])   # the grid is empty again
 
 
-async def test_mass_registration_with_a_bad_row_saves_nothing(screen: User, db):
+async def test_mass_registration_problems_show_in_the_rows_and_nothing_is_saved(screen: User, db):
     before = rows(db)
     await screen.open("/stock-mass")
-    element(screen, ui.textarea, "Rows").value = "1\tRA_10\t6\n9\tNOPE\t0"
+    paste(screen, excel((1, "RA_10", 6), (9, "NOPE", 0)))
     screen.find("Check").click()
-    await screen.should_see("Line 2: no warehouse has the id '9'.")
-    await screen.should_see("Line 2: no wine has the id or code 'NOPE'.")
+    await screen.should_see("1 row(s) have problems")
+    data = mass_grid(screen).options["rowData"]
+    assert data[0]["status"] == "OK"
+    assert "No warehouse has the id '9'." in data[1]["status"]
+    assert "No wine has the id or code 'NOPE'." in data[1]["status"]
     assert not element(screen, ui.button, "Save all").enabled
     assert rows(db) == before
 
 
-async def test_mass_registration_changed_text_must_be_checked_again(screen: User):
+async def test_mass_registration_typing_in_a_cell_and_changes_need_a_new_check(screen: User):
     await screen.open("/stock-mass")
-    area = element(screen, ui.textarea, "Rows")
-    area.value = "1\tRA_10\t6"
+    edit(screen, 1, "warehouse", "1")
+    edit(screen, 1, "wine", "RA_10")
+    edit(screen, 1, "quantity", 6)
     screen.find("Check").click()
     await screen.should_see("1 row(s) are correct.")
-    area.value = "1\tRA_10\t7"
-    await screen.should_see("The rows changed. Check them again.")
+    edit(screen, 1, "quantity", 7)
+    await screen.should_see("The rows changed. Check them before you save.")
     assert not element(screen, ui.button, "Save all").enabled
+    screen.find("Check").click()                              # the next check uses the changed cell
+    await screen.should_see("1 row(s) are correct.")
+    assert mass_grid(screen).options["rowData"][0]["quantity"] == "7"
+
+
+async def test_mass_registration_paste_grows_the_grid_and_add_rows(screen: User):
+    await screen.open("/stock-mass")
+    assert len(mass_grid(screen).options["rowData"]) == 20
+    paste(screen, excel((1, "RA_10", 1), (1, "RA_10", 2), (1, "RA_10", 3)), row=19)
+    assert len(mass_grid(screen).options["rowData"]) == 22
+    screen.find("Add 20 rows").click()
+    assert len(mass_grid(screen).options["rowData"]) == 42
+
+
+def test_the_browser_paste_handler_sends_excel_text_with_its_cell():
+    from winedb.ui.stock_mass import PASTE_JS
+    assert "[" + chr(92) + "t" + chr(92) + "n]" in PASTE_JS    # the regular expression for tab or line break
+    assert "row-index" in PASTE_JS and "col-id" in PASTE_JS and "preventDefault" in PASTE_JS

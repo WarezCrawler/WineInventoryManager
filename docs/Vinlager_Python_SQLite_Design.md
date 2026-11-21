@@ -262,13 +262,15 @@ Then the user clicks **Save** or **Cancel**. While the user types, the screen sh
 
 In Access, the button "Import vinlager tilgange/afgange" opened the query `qVinlager_Change_Import` as an editable grid: `SELECT Lager_ID, Vin_ID, Quantity, Kommentar FROM tVinlager WHERE Date_Create > Now()`. The filter makes the grid open empty (no row has a future date), and the user pastes many stock changes at once, usually from Excel. Each new row gets the date from the table default `Now()`. So it is a mass registration, not a file import.
 
-The new screen does the same, with the same table and fields:
-1. The user pastes rows into a text box, one stock change per row: warehouse id, wine, quantity, comment. Columns are separated by tabs (as Excel pastes them) or by semicolons. A heading row is skipped.
-2. **Wine:** the wine id (as in Access) or the wine code. A whole number that is a wine id gives that wine. Other text is looked up as a code, with upper and lower case the same. A number that is the id of one wine and the code of another wine is refused as ambiguous.
-3. **Check** shows what each row means (warehouse name, wine code and name) and lists every problem with its line number.
-4. **Save all** is possible only after a check without problems, and only while the text is unchanged. It saves **all rows or none**, in one transaction. All rows get the same date: now.
+The new screen does the same, with the same table and fields. It is an editable **grid**, as the Access datasheet was:
+1. **Columns:** line, warehouse id, wine, quantity, comment. After a check, three read-only columns show the warehouse name, the wine (code, name, vintage) and the result of the row: "OK" or its problems.
+2. **Paste from Excel:** the user selects a cell and pastes (Ctrl+V). The copied cells fill the grid from that cell down and to the right, and the grid grows when it needs more rows. A heading row is skipped when the paste starts in the warehouse column. Cells after the comment column are left out, and the screen says how many. The user can also type in the cells. The grid starts with 20 empty rows; "Add 20 rows" adds more. Empty rows are ignored.
+   AG Grid's own paste of many cells is an Enterprise feature, so the page catches the paste in the browser: text with a tab or a line break goes to the server with the row and column of the selected cell (`stock_mass.PASTE_JS`).
+3. **Wine:** the wine id (as in Access) or the wine code. A whole number that is a wine id gives that wine. Other text is looked up as a code, with upper and lower case the same. A number that is the id of one wine and the code of another wine is refused as ambiguous.
+4. **Check** fills in the result columns of every row.
+5. **Save all** is possible only after a check without problems, and only while no cell has changed since. It saves **all rows or none**, in one transaction. All rows get the same date: now. After the save, the grid is empty again.
 
-The data functions are `mass_entry.check()` and `stock.add_movements()`.
+The data functions are `mass_entry.paste_into()`, `mass_entry.check_rows()` and `stock.add_movements()`.
 
 ### 6.3 Invoice header screen
 The fields are those in §5.4. The buttons are Save, Close invoice (sets `is_closed`) and Open lines. A new invoice must have a customer; the screen does not offer the Access default of customer `0`.

@@ -1,15 +1,47 @@
-"""Mass stock registration (design doc §6.2.1, replaces the Access button "Import vinlager tilgange/afgange")."""
+"""Mass stock registration (design doc §6.2.1, replaces the Access button "Import vinlager tilgange/afgange",
+which opened an editable grid). The user types into the grid or pastes a block of cells from Excel."""
 from nicegui import ui
 
 from winedb.db import connect
-from winedb.mass_entry import check
+from winedb.mass_entry import COLUMNS, blank_row, check_rows, grid_rows_to_check, paste_into
 from winedb.stock import add_movements
 from winedb.ui.labels import label
 from winedb.validation import ValidationError
 
-PREVIEW_COLUMNS = ("line", "warehouse", "wine", "quantity", "comment", "status")
-HELP = ("Paste rows from Excel, one stock change per row, with the columns: warehouse id, wine (id or code), "
-        "quantity (negative to remove stock), comment. A heading row is skipped. All rows get today's date and time.")
+START_ROWS = 20
+HELP = ("Click a cell and paste from Excel (Ctrl+V): the copied cells fill the grid from that cell down and to the "
+        "right, and the grid grows when needed. You can also type in the cells. Columns: warehouse id, wine (id or "
+        "code), quantity (negative to remove stock), comment. Empty rows are ignored. All rows get today's date and time.")
+
+# The grid gets the paste from the browser: AG Grid's own paste of many cells is an Enterprise feature.
+# Text with a tab or a line break (anything copied from Excel) is sent to the server with the row and the
+# column of the cell where the user pasted; other text is left to the browser (paste into an open cell).
+PASTE_JS = """(e) => {
+    const text = e.clipboardData ? e.clipboardData.getData('text/plain') : '';
+    if (!/[\\t\\n]/.test(text)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const row = e.target.closest('[row-index]');
+    const cell = e.target.closest('[col-id]');
+    emit({text: text, row: row ? Number(row.getAttribute('row-index')) : 0, col: cell ? cell.getAttribute('col-id') : ''});
+}"""
+
+
+def _column(field: str, header: str, editable: bool, **extra) -> dict:
+    return {"field": field, "headerName": header, "editable": editable, "resizable": True,
+            "cellClass": "" if editable else "bg-gray-100", **extra}
+
+
+COLUMN_DEFS = [
+    _column("line", label("line"), False, width=70),
+    _column("warehouse", "Warehouse id", True, width=120),
+    _column("wine", "Wine (id or code)", True, width=170),
+    _column("quantity", label("quantity"), True, width=110),
+    _column("comment", label("comment"), True, flex=2, minWidth=160),
+    _column("warehouse_name", label("warehouse"), False, width=140),
+    _column("wine_name", label("wine"), False, flex=2, minWidth=180),
+    _column("status", label("status"), False, flex=3, minWidth=200),
+]
 
 
 @ui.page("/stock-mass")
@@ -21,70 +53,115 @@ def stock_mass_page():
         ui.link("Main menu", "/").classes("text-white")
 
     ui.label(HELP).classes("text-sm opacity-80")
-    text = ui.textarea("Rows").props("outlined input-class=font-mono").classes("w-full")
     with ui.row():
         check_button = ui.button("Check").props("no-caps")
         save_button = ui.button("Save all").props("no-caps")
+        add_button = ui.button("Add 20 rows").props("no-caps flat")
+        clear_button = ui.button("Clear").props("no-caps flat")
         ui.button("Cancel", on_click=lambda: ui.navigate.to("/")).props("no-caps flat")
     summary = ui.label("").classes("font-bold")
-    problems = ui.column().classes("gap-0 text-negative")
-    columns = [{"name": c, "label": label(c), "field": c, "align": "left"} for c in PREVIEW_COLUMNS]
-    preview = ui.table(columns=columns, rows=[], row_key="line").props("dense").classes("w-full")
 
-    checked = {"text": None}   # the text of the last check without problems; Save works only for that text
+    state = {"rows": [blank_row(n) for n in range(1, START_ROWS + 1)], "checked": False}
+    grid = ui.aggrid({
+        "columnDefs": COLUMN_DEFS,
+        "rowData": state["rows"],
+        "stopEditingWhenCellsLoseFocus": True,
+        "enterNavigatesVertically": True,
+        "enterNavigatesVerticallyAfterEdit": True,
+        "singleClickEdit": False,
+    }).classes("w-full").style("height: 60vh")
     save_button.disable()
 
-    def show_problems(lines: list[str]) -> None:
-        problems.clear()
-        with problems:
-            for line in lines:
-                ui.label(line)
+    def show() -> None:
+        grid.options["rowData"] = state["rows"]
+        grid.update()
 
-    def run_check() -> None:
+    def not_checked(message: str = "") -> None:
+        state["checked"] = False
+        save_button.disable()
+        summary.text = message
+
+    def clear_results(row: dict) -> None:
+        for key in ("warehouse_name", "wine_name", "status"):
+            row.pop(key, None)
+
+    def on_paste(e) -> None:
+        args = e.args or {}
+        ignored = paste_into(state["rows"], args.get("text", ""), int(args.get("row") or 0), args.get("col") or "")
+        for row in state["rows"]:
+            clear_results(row)
+        show()
+        not_checked("The rows changed. Check them before you save.")
+        if ignored:
+            ui.notify(f"{ignored} pasted cell(s) after the comment column were left out.", type="warning")
+
+    def on_edit(e) -> None:
+        args = e.args or {}
+        field, line = args.get("colId"), (args.get("data") or {}).get("line")
+        if field not in COLUMNS or not line:
+            return
+        row = state["rows"][line - 1]
+        row[field] = "" if args.get("newValue") is None else str(args.get("newValue"))
+        clear_results(row)
+        not_checked("The rows changed. Check them before you save.")
+
+    def run_check() -> bool:
         conn = connect()
         try:
-            rows, shown, found = check(conn, text.value)
+            to_save, preview, problems = check_rows(conn, grid_rows_to_check(state["rows"]))
         finally:
             conn.close()
-        preview.rows = shown
-        show_problems(found)
-        if found:
-            checked["text"] = None
-            save_button.disable()
-            summary.text = f"{len(found)} problem(s). Correct the rows and check again. Nothing is saved."
-        else:
-            checked["text"] = text.value
-            save_button.enable()
-            summary.text = f"{len(rows)} row(s) are correct. Click Save all to save them."
-
-    def text_changed() -> None:
-        if checked["text"] is not None and text.value != checked["text"]:
-            checked["text"] = None
-            save_button.disable()
-            summary.text = "The rows changed. Check them again."
+        by_line = {p["line"]: p for p in preview}
+        for row in state["rows"]:
+            clear_results(row)
+            p = by_line.get(row["line"])
+            if p:
+                row["warehouse_name"] = p["warehouse"] if not p["problems"] else ""
+                row["wine_name"] = p["wine"] if " – " in str(p["wine"]) else ""
+                row["status"] = "OK" if not p["problems"] else " ".join(p["problems"])
+        show()
+        if not preview:
+            not_checked("The grid is empty. Paste or type at least one row.")
+            return False
+        if problems:
+            not_checked(f"{len([p for p in preview if p['problems']])} row(s) have problems: see the column "
+                        f"{label('status')}. Correct them and check again. Nothing is saved.")
+            return False
+        state["checked"] = True
+        save_button.enable()
+        summary.text = f"{len(to_save)} row(s) are correct. Click Save all to save them."
+        return True
 
     def save_all() -> None:
         conn = connect()
         try:
-            rows, shown, found = check(conn, text.value)   # check again: the data can have changed
-            if not found:
-                add_movements(conn, rows)
-        except ValidationError as e:
-            found = e.problems
-        finally:
+            to_save, _, problems = check_rows(conn, grid_rows_to_check(state["rows"]))   # the data can have changed
+            if problems:
+                raise ValidationError(problems)
+            add_movements(conn, to_save)
+        except ValidationError:
             conn.close()
-        if found:
-            preview.rows = shown
-            show_problems(found)
-            save_button.disable()
-            summary.text = "Nothing is saved. Correct the rows and check again."
+            run_check()
+            summary.text = "Nothing is saved. " + summary.text
             return
-        ui.notify(f"{len(rows)} stock change(s) are saved.", type="positive")
-        text.value, preview.rows, checked["text"] = "", [], None
-        show_problems([])
-        summary.text = f"Saved {len(rows)} stock change(s)."
-        save_button.disable()
+        conn.close()
+        ui.notify(f"{len(to_save)} stock change(s) are saved.", type="positive")
+        state["rows"] = [blank_row(n) for n in range(1, START_ROWS + 1)]
+        show()
+        not_checked(f"Saved {len(to_save)} stock change(s).")
 
+    def add_rows() -> None:
+        state["rows"] += [blank_row(len(state["rows"]) + n) for n in range(1, 21)]
+        show()
+
+    def clear_all() -> None:
+        state["rows"] = [blank_row(n) for n in range(1, START_ROWS + 1)]
+        show()
+        not_checked("")
+
+    grid.on("paste", on_paste, js_handler=PASTE_JS)
+    grid.on("cellValueChanged", on_edit)
     check_button.on_click(run_check)
     save_button.on_click(save_all)
-    text.on_value_change(lambda _: text_changed())
+    add_button.on_click(add_rows)
+    clear_button.on_click(clear_all)

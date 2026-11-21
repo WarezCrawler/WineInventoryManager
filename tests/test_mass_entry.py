@@ -107,3 +107,54 @@ def test_one_bad_row_saves_nothing(conn):
 def test_no_rows(conn):
     with pytest.raises(ValidationError):
         add_movements(conn, [])
+
+
+# --- the grid: paste placement and rows to check ---
+
+from winedb.mass_entry import blank_row, check_rows, grid_rows_to_check, paste_into  # noqa: E402
+
+EXCEL = "Lager\tVin\tAntal\tKommentar\r\n1\t216\t6\tDelivery 42\r\n2\tSAbSe_RA09\t-2\t\r\n"
+
+
+def grid(n=3):
+    return [blank_row(i) for i in range(1, n + 1)]
+
+
+def test_excel_block_fills_from_the_first_cell_and_skips_the_heading():
+    rows = grid()
+    assert paste_into(rows, EXCEL, 0, "warehouse") == 0
+    assert [(r["warehouse"], r["wine"], r["quantity"], r["comment"]) for r in rows] == [
+        ("1", "216", "6", "Delivery 42"), ("2", "SAbSe_RA09", "-2", ""), ("", "", "", "")]
+
+
+def test_paste_lower_in_the_grid_grows_it():
+    rows = grid(2)
+    paste_into(rows, "1\t216\t6\n1\t216\t7\n", 1, "warehouse")
+    assert [r["line"] for r in rows] == [1, 2, 3] and rows[2]["quantity"] == "7"
+
+
+def test_paste_from_the_wine_column_fills_to_the_right_and_counts_what_does_not_fit():
+    rows = grid()
+    assert paste_into(rows, "216\t6\tok\textra\n", 0, "wine") == 1
+    assert (rows[0]["warehouse"], rows[0]["wine"], rows[0]["quantity"], rows[0]["comment"]) == ("", "216", "6", "ok")
+
+
+def test_one_copied_excel_cell_goes_into_the_selected_cell():
+    rows = grid()
+    paste_into(rows, "SAbSe_RA09\r\n", 2, "wine")
+    assert rows[2]["wine"] == "SAbSe_RA09" and rows[2]["warehouse"] == ""
+
+
+def test_blank_rows_are_not_checked_and_lines_keep_the_grid_numbers(conn):
+    rows = grid(4)
+    paste_into(rows, "1\t216\t6\n", 2, "warehouse")
+    to_check = grid_rows_to_check(rows)
+    assert to_check == [(3, ["1", "216", "6", ""])]
+    to_save, preview, problems = check_rows(conn, to_check)
+    assert problems == [] and preview[0]["line"] == 3 and preview[0]["problems"] == []
+
+
+def test_problems_per_row_are_sentences(conn):
+    _, preview, problems = check_rows(conn, [(5, ["9", "NOPE", "0", ""])])
+    assert preview[0]["problems"][0] == "No warehouse has the id '9'."
+    assert problems[0] == "Line 5: no warehouse has the id '9'."
