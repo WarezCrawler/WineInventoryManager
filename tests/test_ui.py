@@ -255,8 +255,11 @@ async def test_mass_registration_warehouse_and_wine_cells_have_lists_and_show_na
     assert wine_names["RA_10"] == "RA_10 – Rosso 2010"             # a code shows its wine
     assert wine_names["10"] == "10 = RA_10 – Rosso 2010"           # an id too
     assert "OLD_EMPTY" not in wine_names                           # same wines as the stock change picker
-    # Double-click, Enter or F2 open the list; typing opens the text editor.
-    selector = columns["wine"][":cellEditorSelector"]
-    assert "agSelectCellEditor" in selector and "agTextCellEditor" in selector and "eventKey" in selector
-    assert '"21_fejl"' in selector and '"RA_10"' in selector
+    # Warehouse: double-click, Enter or F2 open the list; typing opens the text editor.
+    selector = columns["warehouse"][":cellEditorSelector"]
+    assert "agSelectCellEditor" in selector and "agTextCellEditor" in selector and '"1", "2"' in selector
+    # Wine: a text box with suggestions (a datalist) that the browser filters on code and name.
+    editor = columns["wine"][":cellEditor"]
+    assert editor.startswith("class {") and "datalist" in editor and "getValue()" in editor
+    assert '["21_fejl", "21_fejl' in editor and "Gone with stock 2002" in editor and '"OLD_EMPTY"' not in editor
     assert "warehouse_name" not in columns and "wine_name" not in columns

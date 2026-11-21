@@ -13,7 +13,7 @@ from winedb.validation import ValidationError
 
 HELP = ("Click a cell and paste from Excel (Ctrl+V): the copied cells fill the grid from that cell down and to the "
         "right. As in Access, the last row is always a new, empty row: the grid grows by the rows you paste or type. "
-        "Double-click a warehouse or wine cell for a list. "
+        "Double-click a warehouse cell for a list. In a wine cell, type part of the code or the name for suggestions. "
         "Columns: warehouse id, wine (id or code), quantity (negative to remove stock), comment. Empty rows are "
         "ignored. All rows get today's date and time.")
 
@@ -44,6 +44,44 @@ def _pick_list(values: list[str]) -> str:
             f" : {{component: 'agSelectCellEditor', params: {{values: {json.dumps(values)}}}}}")
 
 
+def _searchable_wine_editor(wines: list[dict]) -> str:
+    """A cell editor (a JavaScript class) for the wine cell: a text box with suggestions while the user types.
+    The suggestions are an HTML datalist, which the browser filters on any part of the code or the name.
+    AG Grid's own searchable list is an Enterprise feature. The value is the typed or picked code."""
+    choices = json.dumps([[w["item_code"], f"{w['item_code']} – {w['name']} {w['vintage']}"] for w in wines])
+    return """class {
+    init(params) {
+        const listId = 'wine-choices';
+        if (!document.getElementById(listId)) {
+            const list = document.createElement('datalist');
+            list.id = listId;
+            for (const [value, text] of %s) {
+                const option = document.createElement('option');
+                option.value = value;
+                option.label = text;
+                list.appendChild(option);
+            }
+            document.body.appendChild(list);
+        }
+        this.input = document.createElement('input');
+        this.input.setAttribute('list', listId);
+        this.input.setAttribute('placeholder', 'Type part of the code or the name');
+        this.input.className = 'ag-input-field-input ag-text-field-input';
+        this.input.style.width = '100%%';
+        this.input.style.height = '100%%';
+        const typed = params.eventKey && params.eventKey.length === 1;
+        this.input.value = typed ? params.eventKey : (params.value == null ? '' : String(params.value));
+    }
+    getGui() { return this.input; }
+    afterGuiAttached() {
+        this.input.focus();
+        const end = this.input.value.length;
+        this.input.setSelectionRange(end, end);
+    }
+    getValue() { return this.input.value.trim(); }
+}""" % choices
+
+
 def column_defs(warehouses: list[dict], wines: list[dict]) -> list[dict]:
     """The grid columns. Warehouse and wine have a dropdown list, and their cells show the name next to the
     id or code (AG Grid `refData`); the cell value itself stays the id or code that is checked and saved.
@@ -56,8 +94,9 @@ def column_defs(warehouses: list[dict], wines: list[dict]) -> list[dict]:
         _column("line", label("line"), False, width=70),
         _column("warehouse", label("warehouse"), True, width=170, refData=warehouse_text, headerTooltip=tip,
                 **{":cellEditorSelector": _pick_list(list(warehouse_text))}),
-        _column("wine", "Wine (id or code)", True, flex=2, minWidth=240, refData=wine_text, headerTooltip=tip,
-                **{":cellEditorSelector": _pick_list([w["item_code"] for w in wines])}),
+        _column("wine", "Wine (id or code)", True, flex=2, minWidth=240, refData=wine_text,
+                headerTooltip="Type part of the code or the name for suggestions.",
+                **{":cellEditor": _searchable_wine_editor(wines)}),
         _column("quantity", label("quantity"), True, width=110),
         _column("comment", label("comment"), True, flex=2, minWidth=160),
         _column("status", label("status"), False, flex=3, minWidth=200),
