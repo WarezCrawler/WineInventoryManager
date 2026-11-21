@@ -77,7 +77,7 @@ The database catalogue stores only one relationship that could be identified: `t
 | `qVinliste` | Select | Active wines (`Udgået<>True`, sorted by name and vintage). Source of the combo boxes. |
 | `qVinliste_Vedligehold` | Select | Wine list for the maintenance form. |
 | `qVinlager_Salg` | Select | Joins sale lines, invoices, customers, wines and warehouses. It is the source of `rFaktura`, leaves out `Delete=True`, and formats dates as `yyyy/mm/dd`. |
-| `qVinlager_Change`, `qVinlager_Change_Import` | Select / Append *(inferred)* | Stock change entry, and import of many stock changes at once. |
+| `qVinlager_Change`, `qVinlager_Change_Import` | Select | `qVinlager_Change` is the source of the stock change form. `qVinlager_Change_Import` selects the stock rows with a future date, so it opens as an **empty editable grid**: the button "Import vinlager tilgange/afgange" opens it, and the user pastes many stock changes at once (checked in the Access export, 2026-11-21). |
 | `uVinlager`, `uVinlager_Excel` | Union | Receipts and sales in one list, for the stock calculation and the Excel export. |
 | `qVinliste` combo boxes and price lookups | Select | Show only wines with `Udgået<>True AND Private<>True`. The price combo boxes read `[Forms]![fVinlager_Salg]![Vin_ID]` (queries with a form parameter). |
 | Invoice combo boxes | Select | Open invoices (`Lukket<>True`) and closed invoices, each joined to the customer name. |

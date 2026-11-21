@@ -50,7 +50,7 @@ This document adds to [Vinlager_DB_Design.md](Vinlager_DB_Design.md); read that 
 - Wines by country: FR 89, IT 53, DE 46, ES 35. Some products that are not wine are stored as wines: `Vinkasse 6 hvid`, `Vinkasse 6 rød`, `DK` and `Vinsmagning`.
 - Types: Rød 141 + 10 (lowercase), Hvid 61, Mousserende 7, Dessert 4, Rose 3, null 2.
 - Sizes: Alm 201 + 1, MGM 18, Halv 4, DMGM 2, null 2.
-- `Udgået` (discontinued) is False on every wine. So the flag is not used, or the users use the "Private" flag instead.
+- `Udgået` (discontinued): **corrected 2026-11-21:** 60 of the 228 wines are discontinued. The offline parser misread the flag as False on every wine. Example: the 10 wines with a code ending in `_fejl` ("error"), mostly second copies of a wine, of which 9 are discontinued.
 
 ### A4. Encoding and names
 
@@ -67,7 +67,7 @@ This document adds to [Vinlager_DB_Design.md](Vinlager_DB_Design.md); read that 
 - **Saved queries (8 with a name):** qVinlager_Change, qVinlager_Change_Import, qVinlager_Salg, qVinliste, qVinliste_Vedligehold, uVinlager, uVinlager_Excel, and **"Consistency Check"**. The last one compares row counts and sums between `uVinlager` / `uVinlager_Excel` and `tVinlager` + `tVinlager_Salg`. This suggests that the Excel export is used to check the data.
 - **Hidden `~sq_*` objects** are the row-source queries of controls: `cKunde_ID` and `cLager_ID` on fFaktura, `cboFaktura` on fNavigation, and `cboSalgsPris`, `cboCostPris`, `cVin_ID`, `cLager_ID`, `cFakt_ID` and `Combo81` on fVinlager_Salg. The form export contains them, so they need no separate export.
 - **Relationship objects:** only `tVinlistetPrisliste_Cost`, plus two system relationships of the navigation pane. The other joins are possibly defined only in queries.
-- `qVinlager_Change` filters on `tVinlager.Date_Create > Now()`, so it shows *stock receipts with a future date*. The purpose is unknown (planned deliveries?).
+- `qVinlager_Change_Import` (not `qVinlager_Change`) filters on `tVinlager.Date_Create > Now()`. **Explained 2026-11-21:** no row has a future date, so the query opens as an empty editable grid. The button "Import vinlager tilgange/afgange" opens it, and the user pastes many stock changes at once.
 - A data macro on `tKunder` (After Update, `EditRecord`) logged errors on 2013-02-28 (error −20335). Its content was not recovered.
 - The embedded Office theme `Kontortema.thmx` is not needed.
 - The `Development` module and `~TMPCLPMacro` look like scratch objects.

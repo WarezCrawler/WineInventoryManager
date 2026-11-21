@@ -135,4 +135,4 @@ The migration tool is a separate tool in the repo (`migrate/`). To run it: `pyth
 - **The offline parser is a third-party library.** Cross-check its output against the CSV export.
 - **The file contains personal and bank data** (customers, settings). Keep the `.accdb` file, the CSV files and the migrated `.db` file out of all public repos.
 - **An older program version could open a newer database.** The version check prevents this (§4, item 5).
-- **Some business meanings are not documented:** the price types `0P`, `EP` and `Rabat`, the cost type `rå`, and stock receipts with a future date. Ask the owner.
+- **Some business meanings are not documented:** the price types `0P`, `EP` and `Rabat`, and the cost type `rå`. Ask the owner. (The "stock receipts with a future date" were explained later: the filter makes an empty grid for mass registration.)

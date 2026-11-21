@@ -4,7 +4,7 @@ import pytest
 
 from migrate.column_map import COLUMN_MAP, TABLE_MAP
 from winedb import config
-from winedb.db import SchemaTooNewError, connect, latest_version
+from winedb.db import SchemaTooNewError, connect, latest_version, transaction
 
 
 def tables(conn):
@@ -107,3 +107,14 @@ def test_db_path_env_override(monkeypatch, tmp_path):
     assert config.db_path() == tmp_path / "x.db"
     monkeypatch.delenv("WINE_DB_PATH")
     assert config.db_path().name == "wine_inventory.db" and config.db_path().parent.name == "data"
+
+
+def test_transaction_saves_all_or_nothing(tmp_path):
+    conn = connect(tmp_path / "wine.db")
+    with transaction(conn):
+        conn.execute("INSERT INTO warehouses (warehouse_name) VALUES ('A')")
+    with pytest.raises(RuntimeError):
+        with transaction(conn):
+            conn.execute("INSERT INTO warehouses (warehouse_name) VALUES ('B')")
+            raise RuntimeError("stop")
+    assert [r[0] for r in conn.execute("SELECT warehouse_name FROM warehouses")] == ["A"]
