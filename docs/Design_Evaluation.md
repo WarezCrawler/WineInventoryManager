@@ -332,7 +332,7 @@ Keep the one numbered chain and `user_version`. A module is then a border in the
 
 ### 9.3 Decided: a stock row is booked when the transaction is closed (M14)
 
-Step 2b first said: each save of an invoice line writes a stock row, and each edit writes a reversal row and a new row. This copies the Access behavior, but each change to a draft would leave two rows in the ledger for ever, and later cause accounting rows for a document that is not final.
+Step 2b first said: each save of an invoice line writes a stock row, and each edit writes a reversal row and a new row. This copies the Access behaviour, but each change to a draft would leave two rows in the ledger for ever, and later cause accounting rows for a document that is not final.
 
 **Decision (owner):**
 
@@ -370,7 +370,7 @@ An event is needed only where the module that causes an effect may not import th
 1. **Two dates.** The model has one date per row (`created_at`). A ledger needs the business date and the recorded time. Without both, "stock at the count date" and later the accounting period can not be right.
 2. **Purchases have no document.** A purchase is a stock row with a comment. Accounting can not post it without a supplier and a cost. A purchase receipt document and suppliers as master data must come before Accounting.
 3. **The cut-off needs a full count** and no negative stock.
-4. **Release 1 collects data that can not be rebuilt (M15, decided).** The cause of each stock movement is free text today. The classification in step 2b must read these comments by hand, and the work grows with each month of use. Three additive columns in release 1 stop this growth. All are outside strict 1:1, all leave the Access behavior unchanged, and all are empty on rows from Access:
+4. **Release 1 collects data that can not be rebuilt (M15, decided).** The cause of each stock movement is free text today. The classification in step 2b must read these comments by hand, and the work grows with each month of use. Three additive columns in release 1 stop this growth. All are outside strict 1:1, all leave the Access behaviour unchanged, and all are empty on rows from Access:
    - `movement_type` on stock changes, picked on the stock change screen (purchase, count, transfer, write-off, sample, other);
    - `recorded_at` on stock changes, invoices and invoice lines: the time the program wrote the row, never edited;
    - `closed_at` on invoices: the time the invoice was closed (needed for M14).

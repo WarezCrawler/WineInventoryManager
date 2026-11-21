@@ -60,7 +60,7 @@ tKunder 1──< tFaktura >──1 tLagre
 - `tVinlager.Vin_ID → tVinliste`, `.Lager_ID → tLagre`
 - `tPrisliste_Cost.Vin_ID` and `tPrisliste_Salg.Vin_ID → tVinliste`
 
-The database catalog stores only one relationship that could be identified: `tVinliste ↔ tPrisliste_Cost`. Query joins and combo boxes use the other relationships, but constraints do not necessarily enforce them.
+The database catalogue stores only one relationship that could be identified: `tVinliste ↔ tPrisliste_Cost`. Query joins and combo boxes use the other relationships, but constraints do not necessarily enforce them.
 
 ### 2.3 Important design points
 
