@@ -1,115 +1,128 @@
-# Vinlager DB – Findings Not in the Design Doc + Decompilation Runbook
+# Vinlager DB – Extra Findings and Access Export Runbook
 
-Companion to [Vinlager_DB_Design.md](Vinlager_DB_Design.md). Read that first.
-Purpose: (A) record extra findings from the offline read, and (B) say exactly what must be extracted on a machine with full Microsoft Access, and how.
+This document adds to [Vinlager_DB_Design.md](Vinlager_DB_Design.md); read that document first. It has two parts:
+- **Part A** records the extra findings from the offline read of the Access file.
+- **Part B** tells exactly what to export on a machine with full Microsoft Access, and how to do it.
 
-Source file: `Vinlager DB_vMaster.accdb` (3.6 MB, last saved 2015-03-07).
-Offline reader used: Python `access-parser` (tables and data only, no Access/ACE).
+> **Status:** the export in Part B was done. Its output is in `A:\Development\WineDB_py\WineDB_work\export`. The VBA code answered question 1 in B3: the formula for `Rabat` is in §5.1 of [the new design doc](../Vinlager_Python_SQLite_Design.md).
+
+- **Source file:** `Vinlager DB_vMaster.accdb` (3.6 MB, last saved 2015-03-07).
+- **Offline reader:** the Python library `access-parser`. It reads tables and data only, without Access or its database engine (ACE).
 
 ---
 
-## Part A – Additional findings
+## Part A – Extra findings
 
-### A1. Data-quality checks (run on the real data)
+### A1. Data quality checks (on the real data)
 
 | Check | Result | Meaning |
 |---|---|---|
-| Invoices pointing to a missing customer | Customer `0` (invoice 6, an open draft) | `tKunder` has no row `0`. The DB probably does not enforce this FK, or `0` is a default. |
-| Invoices with no warehouse (`Lager_ID` null) | 3 | The FK is optional. The new app needs a rule. |
+| Invoices that point to a customer that does not exist | Customer `0` (invoice 6, an open draft) | `tKunder` has no row `0`. The database probably does not enforce this foreign key, or `0` is a default. |
+| Invoices with no warehouse (`Lager_ID` is null) | 3 | The foreign key is optional. The new app needs a rule. |
 | Invoices with no `FakturaDato` | 3 | Probably the open drafts. |
 | Invoices with no sale lines | 8 of 143 | Empty or abandoned invoices. |
-| Open (not `Lukket`) invoices | 14 (IDs 6, 24, 54, 59, 108, 129, 137, 142, 144, 146–150) | Decide whether to migrate or discard them. |
-| Soft-deleted invoices (`Delete=True`) | 1 | Excluded from `qVinlager_Salg`. |
-| Sale lines → invoice / wine orphans | 0 / 0 | Referential integrity is clean on the sales side. |
-| Stock receipts or prices → wine orphans | 0 | Clean. |
-| Wines with no sale price / no cost price | 28 / 6 | Likely discontinued or private wines. |
-| Wines with more than one cost-price row | 18 | `tPrisliste_Cost` is not unique per wine. The app picks via a combo box. |
-| Duplicate `Vin_UID` | 0 | Usable as a natural key. |
-| `tVinlager.Quantity` negative rows | 341 of 863 | **Negative quantities are used as stock adjustments or removals.** The "receipts" table is really a stock-movement ledger. |
-| Wine/warehouse combos with negative on-hand (receipts − sales) | 15 of 283 | There is no stock guard. Either historical errors or a missing movement type. |
-| Sale lines with qty ≤ 0 | 13 | Possibly returns or credit lines. |
-| Customers: duplicate name / no email / hidden / on mail list | 2 / 2 / 10 / 129 | Clean up on migration. |
-| `Momssats` on sale lines | 0.25 on 516 lines, 0.00 on 149 | Zero-VAT lines exist (exports, wine boxes, tastings?). Confirm. |
+| Open invoices (not `Lukket`) | 14 (ids 6, 24, 54, 59, 108, 129, 137, 142, 144, 146–150) | Decide whether to migrate them or discard them. |
+| Soft-deleted invoices (`Delete=True`) | 1 | `qVinlager_Salg` leaves it out. |
+| Sale lines without their invoice / without their wine | 0 / 0 | The links on the sales side are all valid. |
+| Stock receipts or prices without their wine | 0 | All valid. |
+| Wines with no sales price / no cost price | 28 / 6 | Probably discontinued or private wines. |
+| Wines with more than one cost price row | 18 | `tPrisliste_Cost` is not unique for each wine. The user picks the row in a combo box. |
+| Duplicate `Vin_UID` | 0 | `Vin_UID` can be a natural key. |
+| Rows in `tVinlager` with a negative `Quantity` | 341 of 863 | **Negative quantities are stock adjustments or removals.** So the "receipts" table is really a ledger of stock movements. |
+| Combinations of wine and warehouse with negative on-hand stock (receipts − sales) | 15 of 283 | Nothing stops negative stock. The cause is either historical errors or a missing type of stock movement. |
+| Sale lines with a quantity of 0 or less | 13 | Possibly returns or credit lines. |
+| Customers: duplicate name / no email / hidden / on mail list | 2 / 2 / 10 / 129 | Clean up during the migration. |
+| `Momssats` on sale lines | 0.25 on 516 lines, 0.00 on 149 lines | Some lines have no VAT (exports, wine boxes, tastings?). Confirm with the owner. |
 
-### A2. Price and total semantics (important for the rebuild)
+### A2. Meaning of the prices and totals (important for the rebuild)
 
-- `tVinlager_Salg.SalgsPris` is the **VAT-inclusive unit price**. `SamletPris` is the **ex-VAT** line total, and `SamletPris_mMoms` = `SamletPris × (1 + Momssats)`. This held on **all 665 lines** (0 mismatches).
-  Example: qty 1, `SalgsPris` 165, `SamletPris` 132 (= 165 / 1.25).
-- Because of this, `qty × SalgsPris − Rabat = SamletPris` fails on 504 of 665 lines. That is expected, not corruption. **The formula for how `Rabat` enters the totals is still unknown** and must come from the VBA or form code (see B3). The invoice query adds `Rabat` to `SamletPris_mMoms`.
-- `tPrisliste_Salg` has 3 `PrisType` families: `0P` (198 rows), `Alm` (199 incl. case variant), `Tilbud` (43), plus `EP` and `Rabat` (1 each). Meaning of `0P` and `EP` is not documented. Ask the owner.
-- `tPrisliste_Cost.PrisType`: "Standard" (223 incl. case variant) and "rå" (17, probably raw or unrefined cost). `test_slet` column is a leftover ("test, delete").
+- `tVinlager_Salg.SalgsPris` is the **unit price with VAT**. `SamletPris` is the line total **without VAT**, and `SamletPris_mMoms` = `SamletPris × (1 + Momssats)`. This is true on **all 665 lines** (0 mismatches).
+  Example: quantity 1, `SalgsPris` 165, `SamletPris` 132 (= 165 / 1.25).
+- So the formula `quantity × SalgsPris − Rabat = SamletPris` is false on 504 of the 665 lines. This is expected and does not mean the data is corrupt. **How `Rabat` changes the totals is still unknown.** It must come from the VBA or form code (see B3). The invoice query adds `Rabat` to `SamletPris_mMoms`.
+- `tPrisliste_Salg` has 3 main `PrisType` groups: `0P` (198 rows), `Alm` (199, including a case variant) and `Tilbud` (43). `EP` and `Rabat` have 1 row each. The meaning of `0P` and `EP` is not documented; ask the owner.
+- `tPrisliste_Cost.PrisType` has two values: "Standard" (223, including a case variant) and "rå" (17, probably the raw or unrefined cost). The column `test_slet` is a leftover ("test, delete").
 
 ### A3. Reference values
 
-- Sales window: **2013-06-30 → 2015-03-07**. Earliest stock record: 2013-06-21.
-- Totals (good reconciliation targets for the migration): sales lines 665, invoices 143, **Σ `SamletPris` = 326,572.40** (ex VAT), Σ `tVinlager.Quantity` = 3,539 (net of adjustments).
+- Sales period: **2013-06-30 to 2015-03-07**. The first stock record is from 2013-06-21.
+- Totals, which are good targets for the migration check: 665 sale lines, 143 invoices, **Σ `SamletPris` = 326,572.40** (without VAT), Σ `tVinlager.Quantity` = 3,539 (after adjustments).
 - Warehouses: 1 Vinotrentino, 2 "<owner> Privat", 3 "Vinkøleskab" (fridge).
-- Wines by country: FR 89, IT 53, DE 46, ES 35, plus non-wine "products" stored as wines (`Vinkasse 6 hvid`, `Vinkasse 6 rød`, `DK`, `Vinsmagning`). Types: Rød 141+10 (lowercase), Hvid 61, Mousserende 7, Dessert 4, Rose 3, null 2. Sizes: Alm 201+1, MGM 18, Halv 4, DMGM 2, null 2.
-- `Udgået` (discontinued) = False on every wine. The flag is effectively unused, or the "Private" flag is used instead.
+- Wines by country: FR 89, IT 53, DE 46, ES 35. Some products that are not wine are stored as wines: `Vinkasse 6 hvid`, `Vinkasse 6 rød`, `DK` and `Vinsmagning`.
+- Types: Rød 141 + 10 (lowercase), Hvid 61, Mousserende 7, Dessert 4, Rose 3, null 2.
+- Sizes: Alm 201 + 1, MGM 18, Halv 4, DMGM 2, null 2.
+- `Udgået` (discontinued) is False on every wine. So the flag is not used, or the users use the "Private" flag instead.
 
-### A4. Encoding and naming
+### A4. Encoding and names
 
-- Danish characters (æ øå) appear in column names: `Vin_Årgang`, `Vin_Udløb`, `Udgået`, `Vin_Område`, and in data (`Vink�leskab`). My reader showed them as `�`. **Use the exact names from the Access export** and read text as Unicode.
-- Reserved or awkward column names: `By`, `Delete`, `Value`, `Id` (SQL keywords or ambiguous). Rename in the new schema.
-- `tSettings` keys: `<fakt_adr>`, `<fakt_bank_opl>`, `<fakt_betaling_bet>`, `<fakt_savelocation>`. Values contain a postal address, bank registration and account numbers (personal/company data) and a path under `C:\Users\<user>\Dropbox\…`. Not reproduced here.
+- Danish characters (æ, ø, å) are in column names (`Vin_Årgang`, `Vin_Udløb`, `Udgået`, `Vin_Område`) and in the data (`Vink�leskab`). The offline reader showed them as `�`. **Use the exact names from the Access export,** and read all text as Unicode.
+- Some column names are reserved words or unclear: `By`, `Delete`, `Value` and `Id`. Rename them in the new schema.
+- `tSettings` keys: `<fakt_adr>`, `<fakt_bank_opl>`, `<fakt_betaling_bet>` and `<fakt_savelocation>`. The values contain a postal address, bank registration and account numbers (personal and company data), and a path under `C:\Users\<user>\Dropbox\…`. This document does not show the values.
 
-### A5. Objects inventory (from `MSysObjects`)
+### A5. List of objects (from `MSysObjects`)
 
 - **Forms (13):** fFaktura, fFaktura_CopyExisting, fFaktura_genåben, fKunder, fKunder_Mailliste, fLagre, fNavigation, fPrisliste_Cost, fPrisliste_Salg, fSettings, fVinlager_Change, fVinlager_Salg, fVinliste_Vedligehold.
-- **Reports (3):** rFaktura, rKundeListe, rVinliste. **Modules (3):** DBCopyFakt, DBFunctionsA, Development. **Macros (2):** Autoexec, ~TMPCLPMacro.
-- **Saved queries (8 named):** qVinlager_Change, qVinlager_Change_Import, qVinlager_Salg, qVinliste, qVinliste_Vedligehold, uVinlager, uVinlager_Excel, and one called **"Consistency Check"** (compares row counts and sums between `uVinlager` / `uVinlager_Excel` and `tVinlager` + `tVinlager_Salg`; implies the Excel export is a reconciliation tool).
-- **Hidden `~sq_*` objects** are embedded row-source queries of controls: `cKunde_ID` and `cLager_ID` on fFaktura, `cboFaktura` on fNavigation, and `cboSalgsPris`, `cboCostPris`, `cVin_ID`, `cLager_ID`, `cFakt_ID`, `Combo81` on fVinlager_Salg. Reproduced inside the form export, not separately needed.
-- **Relationship objects found:** only `tVinlistetPrisliste_Cost` (plus two Nav-pane system ones). Other joins may be defined only in queries.
-- `qVinlager_Change` filters `tVinlager.Date_Create > Now()` *(future-dated receipts)*. Purpose unknown (planned deliveries?).
-- A data macro on `tKunder` (After Update, `EditRecord`) logged errors on 2013-02-28 (error −20335). Its content is not recovered.
-- Embedded resource: Office theme `Kontortema.thmx` (not needed).
-- A `Development` module and `~TMPCLPMacro` look like scratch.
+- **Reports (3):** rFaktura, rKundeListe, rVinliste.
+- **Modules (3):** DBCopyFakt, DBFunctionsA, Development.
+- **Macros (2):** Autoexec, ~TMPCLPMacro.
+- **Saved queries (8 with a name):** qVinlager_Change, qVinlager_Change_Import, qVinlager_Salg, qVinliste, qVinliste_Vedligehold, uVinlager, uVinlager_Excel, and **"Consistency Check"**. The last one compares row counts and sums between `uVinlager` / `uVinlager_Excel` and `tVinlager` + `tVinlager_Salg`. This suggests that the Excel export is used to check the data.
+- **Hidden `~sq_*` objects** are the row-source queries of controls: `cKunde_ID` and `cLager_ID` on fFaktura, `cboFaktura` on fNavigation, and `cboSalgsPris`, `cboCostPris`, `cVin_ID`, `cLager_ID`, `cFakt_ID` and `Combo81` on fVinlager_Salg. The form export contains them, so they need no separate export.
+- **Relationship objects:** only `tVinlistetPrisliste_Cost`, plus two system relationships of the navigation pane. The other joins are possibly defined only in queries.
+- `qVinlager_Change` filters on `tVinlager.Date_Create > Now()`, so it shows *stock receipts with a future date*. The purpose is unknown (planned deliveries?).
+- A data macro on `tKunder` (After Update, `EditRecord`) logged errors on 2013-02-28 (error −20335). Its content was not recovered.
+- The embedded Office theme `Kontortema.thmx` is not needed.
+- The `Development` module and `~TMPCLPMacro` look like scratch objects.
 
-### A6. Items I could not see
+### A6. Items the offline reader could not see
 
-Defaults, validation rules, input masks, required flags, indexes, which relationships enforce integrity or cascade, all form/report layouts and control bindings, all VBA procedure bodies, `Autoexec` contents, startup options, and the full text of every query.
+Defaults, validation rules, input masks, required flags, indexes, which relationships enforce integrity or cascade, all layouts and control bindings of forms and reports, all VBA procedure bodies, the content of `Autoexec`, the startup options, and the full text of every query.
 
 ---
 
-## Part B – What to extract on the Access machine
+## Part B – What to export on the Access machine
 
-### B1. Needed outputs (checklist)
+### B1. Required output (checklist)
 
-| # | Artifact | Why it matters to the Python rebuild |
+| # | Item | Why the Python rebuild needs it |
 |---|---|---|
-| 1 | **Table schema**: field names (with æøå), data type, size, required, allow-zero-length, default, validation rule and text, caption/format, indexes (unique, primary), lookup properties | Correct DDL and constraints; hidden business rules |
-| 2 | **Relationships**: name, parent/child table, fields, attributes (enforced, cascade update/delete, join type) | Foreign keys and delete behaviour |
-| 3 | **All VBA source** (3 modules plus form/report class modules, with code behind buttons) | Rabat/VAT arithmetic, invoice numbering, close/reopen, copy, PDF naming, mail list, import logic |
-| 4 | **All saved query SQL** (including `uVinlager`, `qVinlager_Change_Import`, "Consistency Check") | Stock formula, import path |
-| 5 | **Forms and reports as text** (`SaveAsText`) | Field lists, control bindings, event wiring, report layout and grouping for the invoice PDF |
+| 1 | **Table schema:** field names (with æ, ø, å), data type, size, required, allow zero length, default, validation rule and text, caption and format, indexes (unique, primary), lookup properties | Correct table definitions and constraints; hidden business rules |
+| 2 | **Relationships:** name, parent and child table, fields, attributes (enforced, cascade update or delete, join type) | Foreign keys and how deletes behave |
+| 3 | **All VBA source:** the 3 modules, and the class modules of forms and reports with the code behind the buttons | Rabat and VAT arithmetic, invoice numbering, close and reopen, copy, PDF names, mail list, import logic |
+| 4 | **The SQL of all saved queries,** including `uVinlager`, `qVinlager_Change_Import` and "Consistency Check" | Stock formula, import path |
+| 5 | **Forms and reports as text** (`SaveAsText`) | Field lists, control bindings, event handlers, layout and grouping of the invoice report for the PDF |
 | 6 | **Macros, UI macros and data macros** (`tKunder` After Update) | Hidden behaviour on customers |
-| 7 | **References** (VBA project) and **startup/DB properties** (start form, ribbon, etc.) | What the app depends on |
-| 8 | **Linked tables** (`TableDef.Connect`) | Check whether anything lives outside this file (none expected) |
-| 9 | **Screenshots** of fNavigation, fFaktura, fVinlager_Salg and the printed rFaktura | Target UX and the invoice look |
-| 10 | Optional: **clean CSV dump** of every table (UTF-8) | Better than my parser for migration. **Contains personal data. Keep private.** |
+| 7 | **References** of the VBA project, and **startup and database properties** (start form, ribbon and other options) | What the app depends on |
+| 8 | **Linked tables** (`TableDef.Connect`) | Shows whether any data is outside this file (none expected) |
+| 9 | **Screenshots** of fNavigation, fFaktura, fVinlager_Salg and the printed rFaktura | How the new screens and the invoice must look |
+| 10 | Optional: **a clean CSV export** of every table (UTF-8) | More reliable than the offline parser for the migration. **It contains personal data. Keep it private.** |
 
-### B2. How to run
+### B2. How to run the export
 
-1. Copy the `.accdb` to a working folder. Never run this on the original.
-2. Open the copy **holding Shift** (bypasses `Autoexec` and startup form). Enable content if prompted.
-3. `Alt+F11` → Insert → Module → paste the script below → put the cursor in `ExportAll` → `F5`.
-4. Output goes to an `export\` folder next to the file: `forms\`, `reports\`, `modules\`, `macros\`, `queries\`, `datamacros\`, `schema.txt`, `relationships.txt`, `references.txt`, `dbprops.txt`, optionally `csv\`.
-5. Zip `export\` plus the screenshots (item 9) and bring it back into this folder. Delete the CSVs from shared locations afterwards (personal data).
+> **Caution:** never run the export on the original file. Always use a copy.
 
-`SaveAsText` writes UTF-16 files. Keep them as-is. I can read them.
+1. Copy the `.accdb` file to a working folder.
+2. Hold down **Shift** and open the copy. Shift stops `Autoexec` and the startup form.
+3. If Access asks, enable the content.
+4. Push `Alt+F11` to open the VBA editor.
+5. Select Insert → Module, and paste the script in B4.
+6. Put the cursor in `ExportAll` and push `F5`.
+   The script writes its output to an `export\` folder next to the file: `forms\`, `reports\`, `modules\`, `macros\`, `queries\`, `datamacros\`, `schema.txt`, `relationships.txt`, `references.txt`, `dbprops.txt`, and `csv\` if you selected it.
+7. Zip the `export\` folder together with the screenshots (item 9), and copy the zip file back to this project.
+8. Delete the CSV files from all shared locations, because they contain personal data.
 
-### B3. Specific questions the exports must answer
+`SaveAsText` writes UTF-16 files. Do not convert them; the rebuild can read them as they are.
 
-1. How exactly does `Rabat` change `SamletPris`, `SamletPris_mMoms` and `SamletCostPris`? (Look in fVinlager_Salg code and AfterUpdate events.)
-2. What do price types `0P`, `EP`, `Alm`, `Tilbud`, `Rabat` and cost type `rå` mean, and how does the form choose the default one?
-3. How is `Fakt_ID` allocated (autonumber or manual) and what do `Lukket`, `Delete`, "genåben" do exactly?
-4. What do `qVinlager_Change_Import` and `uVinlager_Excel` import/export, from where, and in what format?
-5. Which relationships enforce integrity and how do deletes behave?
-6. What does the `tKunder` After Update data macro do?
-7. Does the invoice report show subtotals by VAT rate, and what does `HideSubTotals` hide? Is there an invoice number format or text beyond `Fakt_ID`?
-8. What happens when stock goes negative? Any warning in `fVinlager_Salg`?
+### B3. Questions the export must answer
 
-### B4. Export script (VBA, paste into a standard module)
+1. How exactly does `Rabat` change `SamletPris`, `SamletPris_mMoms` and `SamletCostPris`? (Look in the code of fVinlager_Salg and its AfterUpdate events.)
+2. What do the price types `0P`, `EP`, `Alm`, `Tilbud` and `Rabat` and the cost type `rå` mean? How does the form select the default price type?
+3. How does the app give out `Fakt_ID` (AutoNumber or by hand)? What exactly do `Lukket`, `Delete` and "genåben" do?
+4. What do `qVinlager_Change_Import` and `uVinlager_Excel` import or export, from where, and in which format?
+5. Which relationships enforce integrity, and how do deletes behave?
+6. What does the After Update data macro on `tKunder` do?
+7. Does the invoice report show subtotals for each VAT rate, and what does `HideSubTotals` hide? Does the invoice number have a format or text other than `Fakt_ID`?
+8. What happens when stock becomes negative? Does `fVinlager_Salg` show a warning?
+
+### B4. Export script (VBA; paste it into a standard module)
 
 ```vba
 Option Compare Database
@@ -232,21 +245,24 @@ Public Sub ExportAll()
 End Sub
 ```
 
-Notes:
-- `ExportAll` needs the DAO reference (default in `.accdb`; check VBE → Tools → References → *Microsoft Office xx Access database engine Object Library*).
-- If a form exports empty, open the DB once without Shift and retry. A corrupt or locked form is also possible; report which one failed.
-- If `acTableDataMacro` is not defined in your Access version, use the value `12`.
-- If you prefer, run `Tools → Analyze → Documenter` for the schema as a cross-check and save to PDF.
+**Notes:**
+- `ExportAll` needs the DAO reference. An `.accdb` file has it by default. To check, open the VBA editor and select Tools → References → *Microsoft Office xx Access database engine Object Library*.
+- If a form exports empty, open the database once without Shift and try again. The form can also be corrupt or locked; record which form failed.
+- If your Access version does not define `acTableDataMacro`, use the value `12`.
+- As an optional cross-check of the schema, run Tools → Analyze → Documenter and save the result as a PDF file.
 
-### B5. Alternative if code export is blocked
+### B5. Alternative if the work computer blocks macros
 
-If the work computer blocks macros: open each form in Design view and screenshot; copy VBA by hand from the VBE (Project Explorer → each module and form class); in Query Design → SQL View copy the SQL of every query. Slower but equivalent.
+Do the export by hand. It takes longer, but the result is the same:
+1. Open each form in Design view and take a screenshot.
+2. In the VBA editor, open each module and form class in the Project Explorer and copy the VBA code.
+3. In Query Design, open SQL View for each query and copy the SQL.
 
 ---
 
-## Part C – Next steps once the export is back
+## Part C – Next steps after the export
 
-1. I will complete the schema, relationships, query SQL and business rules in the design doc (replacing every "inferred").
-2. Build the SQLite/Postgres DDL from `schema.txt` and `relationships.txt`.
-3. Write the re-runnable ETL (CSV → clean → load) with the reconciliation checks from A3 (665 lines, 143 invoices, Σ `SamletPris` = 326,572.40, per-wine on-hand).
-4. Rebuild invoicing first (highest risk: `Rabat`/VAT maths and PDF layout), with tests against historical invoices.
+1. Complete the schema, relationships, query SQL and business rules in the design doc, and replace every *(inferred)* item.
+2. Write the table definitions (SQLite or Postgres) from `schema.txt` and `relationships.txt`.
+3. Write the migration (CSV → clean → load) so that it can run again at any time. Include the checks from A3: 665 lines, 143 invoices, Σ `SamletPris` = 326,572.40, and on-hand stock for each wine.
+4. Rebuild invoicing first, because it has the highest risk (`Rabat` and VAT arithmetic, PDF layout). Test it against historical invoices.

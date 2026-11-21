@@ -1,25 +1,27 @@
 # Vinlager DB – Design Document
 
-Source: `Vinlager DB_vMaster.accdb` (Access 2010+ format, last saved 2015-03-07).
-Language of the schema/UI: Danish.
+This document describes the existing Access app: its tables, queries, forms, code and workflows, and the risks found in it. It is the starting point for the rebuild. The decided plan for the new app is in [Vinlager_Python_Rebuild_Plan.md](Vinlager_Python_Rebuild_Plan.md).
 
-> **How this was produced:** Access/ACE is not installed on this machine, so the file was read with a pure-Python parser.
-> Table structures, data, saved-query SQL, macro XML and some VBA string fragments were recovered reliably.
-> **Not recovered:** form/report layouts, full VBA source, relationship-diagram details (enforced integrity, cascade rules), field validation rules and defaults.
-> Anything marked *(inferred)* comes from column names, query SQL or data, not from the object definition itself.
+- **Source:** `Vinlager DB_vMaster.accdb` (Access 2010 or later format, last saved 2015-03-07).
+- **Language of the tables, columns and UI:** Danish.
+
+> **How this document was made:** Access (and its database engine, ACE) was not installed on this machine, so a pure-Python parser read the file.
+> The parser recovered these items reliably: the table structures, the data, the SQL of the saved queries, the macro XML and some text fragments of the VBA code.
+> **Not recovered:** the layouts of forms and reports, the full VBA source, the details of the relationships (enforced integrity, cascade rules), and the validation rules and defaults of the fields.
+> Items marked *(inferred)* come from column names, query SQL or data, not from the object definition itself.
 
 ## 1. Purpose
 
-A small wine-trading stock and invoicing system for **Vinotrentino I/S**. It tracks:
+The app is a small stock and invoicing system for the wine trading business **Vinotrentino I/S**. It records:
 
-- a wine catalogue (~228 wines, 4 countries mainly: FR, IT, DE, ES),
+- a wine catalogue (about 228 wines, mainly from 4 countries: FR, IT, DE and ES),
 - stock received into one of three warehouses (`tLagre`),
-- customers (~176),
-- invoices (~143, 129 closed) with sale lines (665 lines, 2013-06-30 → 2015-03-07, ≈ 326.6k DKK ex. VAT),
-- cost and sale price lists per wine, and
-- PDF invoice output.
+- customers (about 176),
+- invoices (about 143, of which 129 are closed) with sale lines (665 lines from 2013-06-30 to 2015-03-07, about 326,600 DKK without VAT),
+- cost and sales price lists for each wine,
+- invoices as PDF files.
 
-Single-user desktop Access app (front end and data in one file).
+It is a desktop Access app for one user. The forms and the data are in the same file.
 
 ## 2. Data model
 
@@ -27,17 +29,17 @@ Single-user desktop Access app (front end and data in one file).
 
 | Table | Rows | Purpose |
 |---|---|---|
-| `tVinliste` | 228 | Wine master. `Vin_ID` PK. Name, vintage (`Vin_Årgang`), drink-by (`Vin_Udløb`), mature (`Vin_Moden`), country, house, region, type (Rød/Hvid/Rosé/Mousserende/Dessert), size (`Vin_Str`: Alm/Halv/MGM/DMGM), `Vin_UID` (short code, e.g. `SAbSe_RA10`), flags `Udgået` (discontinued) and `Private`. |
-| `tKunder` | 176 | Customers. `Kunde_ID` PK. Name parts, address, phone, email, flags `Skjul` (hidden) and `Maillist`. |
-| `tLagre` | 3 | Warehouses/stock locations (e.g. "Vinotrentino", "<owner> Privat"). |
-| `tFaktura` | 143 | Invoice header. `Fakt_ID` PK, `Kunde_ID`, `Lager_ID`, `FakturaDato`, `Lukket` (closed), `Delete` (soft delete), `HideSubTotals`, `Kommentar`. |
-| `tVinlager` | 863 | Stock **receipts/adjustments** (`Quantity` added to `Lager_ID`, dated). |
-| `tVinlager_Salg` | 665 | Invoice **sale lines**: quantity, unit price, line total ex/inc VAT, cost price snapshot, VAT rate, discount (`Rabat`), price type. Links `Fakt_ID`, `Vin_ID`, `Lager_ID`. |
-| `tPrisliste_Cost` | 240 | Purchase price per wine and `PrisType` (mostly "Standard"). |
-| `tPrisliste_Salg` | 442 | Sales prices per wine and `PrisType` (`0P`, `Alm`, `Tilbud`, `EP`, `Rabat`) with `Momssats` (0.25). |
-| `tSettings` | 4 | Key/value config used on invoices: `<fakt_adr>`, `<fakt_bank_opl>`, `<fakt_betaling_bet>`, `<fakt_savelocation>` (PDF output folder). |
-| `USysApplicationLog` | 3 | Access data-macro error log (2013; `tKunder.AfterUpdate` EditRecord failures). |
-| `MSys*`, `f_…_Data` | – | Access system tables; `Kontortema.thmx` is the embedded Office theme. |
+| `tVinliste` | 228 | Wine master data. Primary key `Vin_ID`. Name, vintage (`Vin_Årgang`), drink-by year (`Vin_Udløb`), year when the wine is mature (`Vin_Moden`), country, house, region, type (Rød/Hvid/Rosé/Mousserende/Dessert), size (`Vin_Str`: Alm/Halv/MGM/DMGM), `Vin_UID` (short code, for example `SAbSe_RA10`), and the flags `Udgået` (discontinued) and `Private`. |
+| `tKunder` | 176 | Customers. Primary key `Kunde_ID`. Name parts, address, phone, email, and the flags `Skjul` (hidden) and `Maillist`. |
+| `tLagre` | 3 | Warehouses (stock locations), for example "Vinotrentino" and "<owner> Privat". |
+| `tFaktura` | 143 | Invoice header. Primary key `Fakt_ID`, and `Kunde_ID`, `Lager_ID`, `FakturaDato`, `Lukket` (closed), `Delete` (soft delete), `HideSubTotals` and `Kommentar`. |
+| `tVinlager` | 863 | Stock **receipts and adjustments**: a dated `Quantity` added to a warehouse (`Lager_ID`). |
+| `tVinlager_Salg` | 665 | Invoice **sale lines**: quantity, unit price, line total with and without VAT, a copy of the cost price, VAT rate, discount (`Rabat`) and price type. Links to `Fakt_ID`, `Vin_ID` and `Lager_ID`. |
+| `tPrisliste_Cost` | 240 | Purchase price for each wine and `PrisType` (mostly "Standard"). |
+| `tPrisliste_Salg` | 442 | Sales prices for each wine and `PrisType` (`0P`, `Alm`, `Tilbud`, `EP`, `Rabat`), with `Momssats` (0.25). |
+| `tSettings` | 4 | Key/value settings used on invoices: `<fakt_adr>`, `<fakt_bank_opl>`, `<fakt_betaling_bet>` and `<fakt_savelocation>` (the folder for the PDF files). |
+| `USysApplicationLog` | 3 | Error log of Access data macros (2013; `EditRecord` failures in `tKunder.AfterUpdate`). |
+| `MSys*`, `f_…_Data` | – | Access system tables. `Kontortema.thmx` is the embedded Office theme. |
 
 ### 2.2 Relationships (from column names and query joins)
 
@@ -56,84 +58,97 @@ tKunder 1──< tFaktura >──1 tLagre
 - `tFaktura.Kunde_ID → tKunder`, `tFaktura.Lager_ID → tLagre`
 - `tVinlager_Salg.Fakt_ID → tFaktura`, `.Vin_ID → tVinliste`, `.Lager_ID → tLagre`
 - `tVinlager.Vin_ID → tVinliste`, `.Lager_ID → tLagre`
-- `tPrisliste_Cost.Vin_ID` / `tPrisliste_Salg.Vin_ID → tVinliste`
-- The only relationship stored in the DB catalog that could be identified is `tVinliste ↔ tPrisliste_Cost`; the rest are enforced by query joins/combo boxes, not necessarily by constraints.
+- `tPrisliste_Cost.Vin_ID` and `tPrisliste_Salg.Vin_ID → tVinliste`
 
-### 2.3 Key design observations
+The database catalog stores only one relationship that could be identified: `tVinliste ↔ tPrisliste_Cost`. Query joins and combo boxes use the other relationships, but constraints do not necessarily enforce them.
 
-- **Stock is derived, not stored:** on-hand = Σ `tVinlager.Quantity` − Σ `tVinlager_Salg.Quantity` (union query `uVinlager` combines both; `uVinlager_Excel` is a variant; a consistency check compares the totals).
-- **Price snapshotting:** sale lines copy sale price, cost price and VAT rate at time of sale, so later price-list edits do not change history. Totals (`SamletPris`, `SamletPris_mMoms`, `SamletCostPris`) are **stored, not computed** – redundancy that can drift.
-- **Soft delete / archive:** `Udgået`, `Skjul`, `Delete`, `Lukket` flags hide rather than remove rows.
-- **Price types** are free text in both price lists (case variants exist: `alm`/`Alm`, `standard`/`Standard`, `rød`/`Rød`).
-- **Settings as key/value** with angle-bracket placeholders (`<fakt_adr>`), presumably substituted into invoice reports.
+### 2.3 Important design points
+
+- **Stock is calculated, not stored:** on-hand stock = Σ `tVinlager.Quantity` − Σ `tVinlager_Salg.Quantity`. The union query `uVinlager` combines both tables. `uVinlager_Excel` is a variant of it, and a consistency check compares the totals.
+- **Prices are copied onto each sale line:** a sale line copies the sales price, cost price and VAT rate at the time of sale, so later changes to the price lists do not change history. The totals (`SamletPris`, `SamletPris_mMoms`, `SamletCostPris`) are **stored, not calculated**. This duplicates data, and the stored totals can become different from the calculated ones.
+- **Rows are hidden, not removed:** the flags `Udgået`, `Skjul`, `Delete` and `Lukket` hide rows.
+- **Price types are free text** in both price lists, with case variants: `alm`/`Alm`, `standard`/`Standard`, `rød`/`Rød`.
+- **Settings are key/value pairs** with angle-bracket placeholders (`<fakt_adr>`). The invoice reports probably replace these placeholders with the values.
 
 ## 3. Queries
 
 | Query | Kind | Role |
 |---|---|---|
-| `qVinliste` | Select | Active wines (`Udgået<>True`, ordered by name/vintage) – combo-box source. |
+| `qVinliste` | Select | Active wines (`Udgået<>True`, sorted by name and vintage). Source of the combo boxes. |
 | `qVinliste_Vedligehold` | Select | Wine list for the maintenance form. |
-| `qVinlager_Salg` | Select | Joins sale lines ↔ invoices ↔ customers ↔ wines ↔ warehouses. Feeds `rFaktura`; filters out `Delete=True`; dates formatted `yyyy/mm/dd`. |
-| `qVinlager_Change`, `qVinlager_Change_Import` | Select / Append *(inferred)* | Stock-change entry and bulk import. |
-| `uVinlager`, `uVinlager_Excel` | Union | Combined receipts and sales ledger for stock level calculation and Excel export. |
-| `qVinliste` combos / price lookups | Select | Filter wines `Udgået<>True AND Private<>True`; price combos read `[Forms]![fVinlager_Salg]![Vin_ID]` (form-parameter queries). |
-| Invoice combos | Select | Open invoices (`Lukket<>True`) and closed invoices, each joined to customer name. |
+| `qVinlager_Salg` | Select | Joins sale lines, invoices, customers, wines and warehouses. It is the source of `rFaktura`, leaves out `Delete=True`, and formats dates as `yyyy/mm/dd`. |
+| `qVinlager_Change`, `qVinlager_Change_Import` | Select / Append *(inferred)* | Stock change entry, and import of many stock changes at once. |
+| `uVinlager`, `uVinlager_Excel` | Union | Receipts and sales in one list, for the stock calculation and the Excel export. |
+| `qVinliste` combo boxes and price lookups | Select | Show only wines with `Udgået<>True AND Private<>True`. The price combo boxes read `[Forms]![fVinlager_Salg]![Vin_ID]` (queries with a form parameter). |
+| Invoice combo boxes | Select | Open invoices (`Lukket<>True`) and closed invoices, each joined to the customer name. |
 
-Queries marked *(inferred)* could not be read in full; names and fragments only.
+Queries marked *(inferred)* could not be read in full; only their names and fragments were recovered.
 
 ## 4. Forms (UI)
 
 | Form | Purpose |
 |---|---|
-| `fNavigation` | Main menu/switchboard: open/new invoice (combo `cboFaktura`), buttons to customers, wine list, stock, sale prices, mail list, settings. UI macros branch: if an invoice is chosen → open `fFaktura` and `fVinlager_Salg` filtered to it; otherwise open `fFaktura` in Add mode. |
+| `fNavigation` | Main menu. It opens an existing or new invoice (combo box `cboFaktura`), and has buttons for customers, wine list, stock, sales prices, mail list and settings. Its UI macros work like this: if the user selected an invoice, they open `fFaktura` and `fVinlager_Salg` filtered to that invoice; if not, they open `fFaktura` to add a new invoice. |
 | `fFaktura` | Invoice header (customer, warehouse, date, comment, closed flag). |
-| `fFaktura_CopyExisting` | Copy an existing invoice to a new one (see §5). |
-| `fFaktura_genåben` | Re-open a closed invoice. |
-| `fVinlager_Salg` | Invoice line entry (wine, price type, price, quantity, discount; combos `cboSalgsPris`, `cboCostPris`). |
-| `fVinlager_Change` | Add stock receipts/adjustments. |
-| `fVinliste_Vedligehold` | Maintain the wine catalogue. |
-| `fKunder`, `fKunder_Mailliste` | Customer maintenance and mailing-list view. |
-| `fPrisliste_Cost`, `fPrisliste_Salg` | Maintain price lists. |
-| `fLagre` | Maintain warehouses. |
-| `fSettings` | Edit `tSettings`. |
+| `fFaktura_CopyExisting` | Copies an existing invoice to a new one (see §5). |
+| `fFaktura_genåben` | Reopens a closed invoice. |
+| `fVinlager_Salg` | Entry of invoice lines (wine, price type, price, quantity, discount; combo boxes `cboSalgsPris` and `cboCostPris`). |
+| `fVinlager_Change` | Adds stock receipts and adjustments. |
+| `fVinliste_Vedligehold` | Maintenance of the wine catalogue. |
+| `fKunder`, `fKunder_Mailliste` | Customer maintenance and the mailing list. |
+| `fPrisliste_Cost`, `fPrisliste_Salg` | Maintenance of the price lists. |
+| `fLagre` | Maintenance of the warehouses. |
+| `fSettings` | Edits `tSettings`. |
 
 ## 5. Reports and code
 
-**Reports:** `rFaktura` (invoice, sourced from `qVinlager_Salg`, with a *Hide Sub Totals* option), `rKundeListe` (customer list), `rVinliste` (wine list).
+**Reports:**
+- `rFaktura`: the invoice. Its source is `qVinlager_Salg`, and it has a *Hide Sub Totals* option.
+- `rKundeListe`: the customer list.
+- `rVinliste`: the wine list.
 
 **Modules:**
+- `DBCopyFakt`: copies an invoice. It creates a new `tFaktura` row for a selected customer, copies `Lukket`, `Lager_ID` and `HideSubTotals`, and sets the comment "Oprettet som kopi af faktura N". Then it copies the sale lines of the invoice.
+- `DBFunctionsA`: helper functions. The recovered fragments show two of them:
+  - the **mail list builder**: `SELECT Mailadr FROM tKunder WHERE Maillist = True and Skjul <> True and Mailadr <> ''`
+  - the **PDF export**: `DoCmd.OutputTo acOutputReport, …, acFormatPDF`, saved to `<fakt_savelocation>`.
+- `Development`: a scratch and utility module for the developer.
 
-- `DBCopyFakt` – copies an invoice: creates a new `tFaktura` row for a chosen customer (copies Lukket, Lager_ID, HideSubTotals, comment "Oprettet som kopi af faktura N"), then copies its sale lines.
-- `DBFunctionsA` – helper functions; recovered fragments show the **mail-list builder** (`SELECT Mailadr FROM tKunder WHERE Maillist = True and Skjul <> True and Mailadr <> ''`) and **PDF export** (`DoCmd.OutputTo acOutputReport, …, acFormatPDF`, saved to `<fakt_savelocation>`).
-- `Development` – developer scratch/utility module.
-
-**Macros:** `Autoexec` (startup, presumably opens `fNavigation`), `~TMPCLPMacro` (temporary clipboard macro), embedded UI macros on `fNavigation` buttons, and a data macro on `tKunder` (After Update) that failed twice in 2013 (`EditRecord failed…`, error −20335).
+**Macros:**
+- `Autoexec` runs at startup and probably opens `fNavigation`.
+- `~TMPCLPMacro` is a temporary clipboard macro.
+- Embedded UI macros on the buttons of `fNavigation`.
+- A data macro on `tKunder` (After Update). It failed two times in 2013 (`EditRecord failed…`, error −20335).
 
 ## 6. Main workflows
 
-1. **Receive stock:** `fVinlager_Change` → row in `tVinlager`.
-2. **Invoice a sale:** `fNavigation` → new/open invoice (`fFaktura`) → add lines in `fVinlager_Salg` (price from `tPrisliste_Salg`, cost from `tPrisliste_Cost`, stored as snapshot) → close invoice (`Lukket`) → print `rFaktura` to PDF in the configured folder.
-3. **Re-open / copy invoice:** `fFaktura_genåben`, `fFaktura_CopyExisting` (`DBCopyFakt`).
-4. **Maintain masters:** wines, customers, warehouses, both price lists, settings via their forms.
-5. **Mailing list / exports:** `fKunder_Mailliste`, `uVinlager_Excel`.
+1. **Receive stock:** in `fVinlager_Change`, the user adds a row to `tVinlager`.
+2. **Invoice a sale:**
+   1. In `fNavigation`, the user opens a new or existing invoice (`fFaktura`).
+   2. In `fVinlager_Salg`, the user adds lines. The price comes from `tPrisliste_Salg` and the cost from `tPrisliste_Cost`; the line stores a copy of both.
+   3. The user closes the invoice (`Lukket`).
+   4. The user prints `rFaktura` to a PDF file in the configured folder.
+3. **Reopen or copy an invoice:** `fFaktura_genåben`, and `fFaktura_CopyExisting` (`DBCopyFakt`).
+4. **Maintain master data:** wines, customers, warehouses, both price lists and settings, each with its own form.
+5. **Mailing list and exports:** `fKunder_Mailliste` and `uVinlager_Excel`.
 
-## 7. Risks and cleanup candidates
+## 7. Risks and candidates for clean-up
 
-- **Personal data in the file:** customer names, addresses, phones, emails, plus bank/registration data in `tSettings`. Treat the file as sensitive; do not commit it to a public repo.
-- **Hard-coded path:** `<fakt_savelocation>` points to a user's Dropbox folder (`C:\Users\<user>\Dropbox\…`); PDF export breaks on any other machine.
-- **Stored derived totals** (`SamletPris*`) can disagree with quantity × price − discount; `Rabat` is added to the VAT-inclusive figure in the invoice query, which should be checked.
-- **Free-text lookup values** (`PrisType`, `Vin_Type`, `Vin_Str`, `Vin_Land`) have case variants and misuse (`Vin_Land` contains "Vinkasse 6 hvid", "Vinsmagning", "DK" – non-wines kept as products). Use lookup tables.
-- **Stock by arithmetic** over two tables with no uniqueness/negative-stock guard; no per-invoice stock check was visible.
-- **Soft-delete flags** are repeated per table with inconsistent semantics (`Delete` vs `Skjul` vs `Udgået`).
-- **Single-file design:** data and UI share one `.accdb`; no split front-end/back-end, so multi-user use or upgrades risk corruption/overwrites.
-- Obsolete/temporary objects: `~TMPCLPMacro`, `~sq_*` internal query objects, a stale `tPrisliste` reference in a saved row source, `test_slet` column ("test/delete") in `tPrisliste_Cost`.
-- Data macro error log shows `tKunder.AfterUpdate` was broken in 2013.
+- **Personal data in the file:** customer names, addresses, phone numbers and email addresses, and bank and registration data in `tSettings`. Treat the file as sensitive, and do not commit it to a public repo.
+- **Hard-coded path:** `<fakt_savelocation>` points to the Dropbox folder of one user (`C:\Users\<user>\Dropbox\…`). The PDF export fails on all other machines.
+- **Stored totals** (`SamletPris*`) can be different from quantity × price − discount. The invoice query adds `Rabat` to the total with VAT; check this.
+- **Free-text lookup values** (`PrisType`, `Vin_Type`, `Vin_Str`, `Vin_Land`) have case variants and wrong values: `Vin_Land` contains "Vinkasse 6 hvid", "Vinsmagning" and "DK", because products that are not wine are stored as wines. Use lookup tables.
+- **Stock is only arithmetic** over two tables. There is no uniqueness check and no check against negative stock, and no stock check per invoice was found.
+- **Each table has its own soft-delete flag,** with a different meaning: `Delete`, `Skjul` and `Udgået`.
+- **One file for everything:** the data and the UI share one `.accdb`. Front end and back end are not split, so use by more than one user, or an upgrade, can corrupt or overwrite data.
+- **Old or temporary objects:** `~TMPCLPMacro`, the internal query objects `~sq_*`, an old reference to `tPrisliste` in a saved row source, and the column `test_slet` ("test/delete") in `tPrisliste_Cost`.
+- **Broken data macro:** the error log shows that `tKunder.AfterUpdate` failed in 2013.
 
-> **Update:** the decided plan (SQLite, all logic in Python, self-contained, Access removed, Power BI on top, one-time migration tool) is in [Vinlager_Python_Rebuild_Plan.md](Vinlager_Python_Rebuild_Plan.md). Extra findings and the Access export runbook are in [Vinlager_Decompilation_Handoff.md](Vinlager_Decompilation_Handoff.md). The section below is the original outline and is superseded.
+> **Update:** the decided plan is in [Vinlager_Python_Rebuild_Plan.md](Vinlager_Python_Rebuild_Plan.md): SQLite, all logic in Python, self-contained, no Access, Power BI for analytics, and a one-time migration tool. More findings and the runbook for the Access export are in [Vinlager_Decompilation_Handoff.md](Vinlager_Decompilation_Handoff.md). The section below is the original outline; the plan replaces it.
 
-## 8. Suggested migration path (if the app is to be modernized)
+## 8. Suggested migration path (original outline, replaced)
 
-1. Open once in Access to export the full schema, relationships, forms and VBA (Database Documenter or `Application.SaveAsText`) and confirm the *(inferred)* items above.
-2. Move data to SQL (SQLite/SQL Server/Postgres) with FKs on the relationships in §2.2 and lookup tables for price types, wine types, sizes, countries.
-3. Replace stored totals with computed columns/views; keep price snapshots.
-4. Rebuild the invoice flow and PDF output against a configurable output path.
+1. Open the file once in Access. Export the full schema, relationships, forms and VBA (with the Database Documenter or `Application.SaveAsText`), and confirm the *(inferred)* items above.
+2. Move the data to a SQL database (SQLite, SQL Server or Postgres), with foreign keys on the relationships in §2.2 and lookup tables for price types, wine types, sizes and countries.
+3. Replace the stored totals with calculated columns or views, and keep the copied prices.
+4. Rebuild the invoice workflow and the PDF output, with an output folder that the user can configure.
