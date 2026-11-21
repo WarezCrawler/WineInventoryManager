@@ -22,7 +22,7 @@ The plan follows [access-analysis/Vinlager_Python_Rebuild_Plan.md](access-analys
 
 ## 1. Scope
 
-**In v1 (to build):**
+**In v1 (to build).** [Functionality.md](Functionality.md) shows which parts are built.
 1. Main menu (replaces the Access form `fNavigation`).
 2. Stock change screen (replaces `fVinlager_Change`).
 3. Invoice screens: the invoice header (`fFaktura`) and the invoice lines (`fVinlager_Salg`), including closing an invoice.
@@ -61,7 +61,7 @@ The plan follows [access-analysis/Vinlager_Python_Rebuild_Plan.md](access-analys
 | Date/Time | `TEXT` in ISO form `YYYY-MM-DD HH:MM:SS` | This is the exact format of the CSV export, and it sorts correctly. |
 | Double, Single | `REAL` (8 bytes) | Exported values such as `120.7575` load unchanged. |
 
-**Table and column names are in English:** snake_case, ASCII only, no reserved words. Tables have descriptive names such as `items`, `invoice_header` and `invoice_lines`. Only the names change. Data values (`Standard`, `Alm`, `Rød`, country names, settings keys such as `<fakt_adr>`) load as they are. §4.1 shows the full mapping with the Access names. The same mapping is in `migrate/column_map.py` (`TABLE_MAP` and `COLUMN_MAP`), which is the single source for the table definitions and the Access import.
+**Table and column names are in English:** snake_case, ASCII only, no reserved words. Tables have descriptive names such as `items`, `invoice_header` and `invoice_lines`. Only the names change. Data values (`Standard`, `Alm`, `Rød`, country names, settings keys such as `<fakt_adr>`) load as they are. §4.1 shows the full mapping with the Access names. The same mapping is in `migrate/column_map.py` (`TABLE_MAP` and `COLUMN_MAP`), which is the single source for the names. The table definitions are in `winedb/migrations/001_init.sql`, and a test checks that their tables and columns are equal to the mapping.
 
 ```sql
 CREATE TABLE warehouses (
@@ -240,9 +240,10 @@ In Access, the open-invoice list uses an **inner join to the customers**, so the
 The user fills in the fields in this order:
 1. Wine: search by the start of the `item_code` (as on the invoice lines screen) or by name. The list shows the name, vintage, type and bottle size.
 2. Warehouse.
-3. Signed quantity.
-4. Comment.
-5. Date (default now).
+3. Type of change (decision 14 in §10).
+4. Signed quantity.
+5. Comment.
+6. Date (default now).
 
 Then the user clicks **Save** or **Cancel**. While the user types, the screen shows the on-hand stock now and after the change. Below the fields, it shows the 20 latest stock movements for the selected wine and warehouse.
 
@@ -264,7 +265,9 @@ WineInventoryManager/   # project root
   data/                # SQLite file, created on first start, git-ignored
   winedb/
     config.py        # database path (WINE_DB_PATH or default)
-    db.py            # connect() = create-if-missing + schema migrations (§4.2), query(), execute(), transaction()
+    db.py            # connect() = create-if-missing + schema migrations (§4.2). A transaction() helper comes
+                     #   with the first write function (step 4 or later); it is not built yet
+    settings.py      # settings.json (decision 13)
     migrations/      # 001_init.sql (§4), then 002_..., numbered
     logic.py         # pure functions without database access: line_amounts(), default_cost()
     stock.py         # on_hand(), add_movement(), recent_movements()
@@ -308,7 +311,7 @@ Do the steps in order. Each step has a check; the step is complete when the chec
    *Check:* enter three historical invoices again: one with a `discount`, one with 0% VAT and one with a negative quantity. The new invoice lines have the same values as the stored ones. Closed invoices are read-only.
 9. **End-to-end test and parallel run.** Use a copy of the database after the Access import. Enter the same new invoice and the same stock change in Access and in the new app, then compare the stored rows.
 
-The numbers in the checks come from the Access export of January 2015. The live Access file is newer, so the numbers change when it is imported.
+The numbers in the checks come from an old copy of the Access data (see "Old copy of the data" under Risks in §10).
 
 ## 9. Backlog (not in v1)
 
@@ -365,7 +368,12 @@ These functions of the Access app come after v1, in about this order of priority
 | 11 | **Decided: rows are never deleted.** If a delete function exists, it is a soft delete: it sets a flag and the row stays. Access could delete rows but never offered it in the UI, and only invoices had a flag (`invoice_header.is_deleted`). So v1 has no delete function except the invoice flag, and no flag columns on other tables. **Open:** the "Delete line" button in §6.4. Did the Access line form have it? How does a user correct a wrong invoice line? | Soft delete for invoices only. If another delete function is designed, add a flag with a new schema migration. |
 | 12 | Invoice output. **Decided:** the app shows the invoice in an on-screen **preview**, which does not have to look exactly like the PDF. **Proposed:** ReportLab (pure Python, works in the packaged `.exe`, no printing step) makes the PDF directly from the data. The app saves it to the PDF folder from `settings.json` and opens it in the default viewer. The preview and the PDF use the same line and total calculation (§5.1), so their amounts are always the same. The PDFs are checked against the reference PDFs in `export/reference_invoices/`. **Open:** when a user reopens and changes an invoice, should the app warn about the saved PDF or overwrite it? | ReportLab; make the PDF when the user asks for it, and save a copy named by invoice number |
 | 13 | **Decided: the app configuration is in `settings.json`, not in the database.** The database holds only master data and transactions. `settings.json` is next to the `data` folder (`WINE_SETTINGS_PATH` overrides the location). It holds the four Access settings: `invoice_address`, `invoice_bank_details` and `invoice_payment_terms` (text printed on invoices) and `invoice_pdf_folder` (different on each machine). The Access import writes the file from `tSettings`, and the check against the source compares every value. **Planned in schema migration 002:** copy the three invoice texts onto each invoice record, so that each invoice keeps its own texts. Until then, the file holds them as the defaults for new invoices. A backup must therefore include the `data` folder and `settings.json`. | Done as described |
+| 14 | **Decided: three new columns outside the 1:1 copy** (`Design_Evaluation.md`, M14 and M15), because this data cannot be added later. (a) `stock_transactions.movement_type`: the cause of a stock change, which the user picks on the stock change screen (purchase, count, transfer, write-off, sample, other; "other" needs a comment). (b) `recorded_at` on `stock_transactions`, `invoice_header` and `invoice_lines`: the time when the program wrote the row. The program sets it, and nobody can edit it. (c) `invoice_header.closed_at`: the time when the invoice was closed, set at each close. All three are NULL on rows from Access, and are required only on new rows (validate on write). A numbered schema migration after `001` adds them. The Access import still loads into the 1:1 schema of version 1, and then the program upgrades the file. **Gap:** today `connect()` always upgrades to the newest version, and the import refuses all versions except 1. So the import needs a way to stop at version 1. | Build with steps 6 and 7 |
 
 **Risks:**
+- **Old copy of the data:** the numbers and data facts in this document (row counts, sums, orphan rows, negative stock) come from an export whose last row is from January 2015. The live Access file is newer. The import and its check against the source do not depend on these numbers. But repeat the checks in §8 that quote them on a current copy before the release.
 - **Rounding:** VBA `Round` rounds half to even. Python's `round` does the same and matched all 665 invoice lines. Keep the golden test: a change to `Decimal` or to another rounding rule would break the amounts without any error.
 - **One user at a time:** only one program instance may use the SQLite file, and the file must be on a local disk. If a second instance tries to write, it gets the error "database is locked". Do not keep the file in a synced folder (Dropbox, OneDrive) while the app runs, because the sync can corrupt it. To back up, copy the file while the app is closed.
+- **Case in text comparison:** `NOCASE` folds ASCII letters only. Inside SQL, `Ø` and `ø` are different, so the app compares in Python where Danish letters are important.
+- **Personal and bank data** is in the CSV files and in `settings.json`. Keep them out of all shared repos (`settings.json` is in `.gitignore`).
+- **Not verified:** the display behaviour of the Access forms (tab order, exact layout) is not copied. This document specifies only how the data behaves.
