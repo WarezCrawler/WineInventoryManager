@@ -19,6 +19,11 @@ LABELS = {
     "created_at": "Date",
     "quantity": "Quantity",
     "comment": "Comment",
+    # Columns of the mass registration preview (not database columns)
+    "line": "Line",
+    "warehouse": "Warehouse",
+    "wine": "Wine",
+    "status": "Check",
 }
 
 

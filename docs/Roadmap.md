@@ -24,7 +24,7 @@ This page shows the plan on one page: what each version contains, in which order
 | 3 | One-time import from Access, checked against the source | Done |
 | 4 | Line amounts and on-hand stock, golden tests on the real data | Done |
 | 5 | Main menu with the list of open invoices | Done |
-| 6 | Stock change screen (the fields of the Access form) | In progress |
+| 6 | Stock change screen (the fields of the Access form) and mass stock registration (the Access "Import vinlager tilgange/afgange" grid) | In progress |
 | 7 | Invoice header screen (create, edit, delete flag, close) | Not started |
 | 8 | Invoice lines screen | Not started |
 | 9 | End-to-end test and parallel run with Access | Not started |
@@ -67,9 +67,10 @@ The Access functions that are not in version 1, in about this order of priority 
 7. Warehouse master data
 8. Settings screen
 9. Stock report and customer list
-10. Stock import
-11. Excel export
-12. Consistency check query
+10. Excel export
+11. Consistency check query
+
+The stock import (mass registration) moved into version 1, step 6.
 
 ## Version 2: modules and a real stock ledger
 

@@ -29,19 +29,8 @@ def on_hand(conn: sqlite3.Connection, item_id: int, warehouse_id: int) -> int:
     return moved - sold
 
 
-def add_movement(conn: sqlite3.Connection, item_id, warehouse_id, quantity, comment=None, created_at=None) -> int:
-    """Write one stock movement (design doc §5.5) and return its `stock_line_id`.
-
-    `quantity` is signed: a positive value adds stock, a negative value removes it. `created_at` is the
-    date of the change; it is now if not given. The fields are those of the Access form
-    (fVinlager_Change); version 1 adds no columns.
-
-    Raises ValidationError, with every problem found, if a rule is broken:
-    - the wine and the warehouse must exist;
-    - the quantity must be a whole number other than 0;
-    - the date must have the form YYYY-MM-DD HH:MM:SS.
-    Negative on-hand stock is allowed (design doc §10, decision 5).
-    """
+def _check(conn: sqlite3.Connection, item_id, warehouse_id, quantity, comment, created_at):
+    """Check one stock movement. Return (problems, cleaned values) without writing anything."""
     problems = []
     if item_id is None or not conn.execute("SELECT 1 FROM items WHERE item_id = ?", (item_id,)).fetchone():
         problems.append("Choose a wine.")
@@ -56,15 +45,54 @@ def add_movement(conn: sqlite3.Connection, item_id, warehouse_id, quantity, comm
     created_at = now_text() if created_at is None or created_at == "" else created_at
     if not is_timestamp(created_at):
         problems.append("Enter the date in the form YYYY-MM-DD HH:MM:SS.")
+    return problems, (created_at, item_id, quantity, comment, warehouse_id)
+
+
+_INSERT = "INSERT INTO stock_transactions (created_at, item_id, quantity, comment, warehouse_id) VALUES (?, ?, ?, ?, ?)"
+
+
+def add_movement(conn: sqlite3.Connection, item_id, warehouse_id, quantity, comment=None, created_at=None) -> int:
+    """Write one stock movement (design doc §5.5) and return its `stock_line_id`.
+
+    `quantity` is signed: a positive value adds stock, a negative value removes it. `created_at` is the
+    date of the change; it is now if not given. The fields are those of the Access form
+    (fVinlager_Change); version 1 adds no columns.
+
+    Raises ValidationError, with every problem found, if a rule is broken:
+    - the wine and the warehouse must exist;
+    - the quantity must be a whole number other than 0;
+    - the date must have the form YYYY-MM-DD HH:MM:SS.
+    Negative on-hand stock is allowed (design doc §10, decision 5).
+    """
+    problems, values = _check(conn, item_id, warehouse_id, quantity, comment, created_at)
     if problems:
         raise ValidationError(problems)
-
     with transaction(conn):
-        cursor = conn.execute(
-            "INSERT INTO stock_transactions (created_at, item_id, quantity, comment, warehouse_id) VALUES (?, ?, ?, ?, ?)",
-            (created_at, item_id, quantity, comment, warehouse_id),
-        )
+        cursor = conn.execute(_INSERT, values)
     return cursor.lastrowid
+
+
+def add_movements(conn: sqlite3.Connection, rows: list[dict]) -> list[int]:
+    """Write many stock movements at once (mass registration, design doc §6.2.1) and return their ids.
+
+    Each row is a dict with `item_id`, `warehouse_id`, `quantity` and optionally `comment`. All rows get
+    the same date: now, as in Access, where the table default `Now()` set it. The rules are those of
+    add_movement(). All or nothing: if any row breaks a rule, nothing is written, and the
+    ValidationError lists each problem with its row number (1 = the first row).
+    """
+    created_at = now_text()
+    problems, values = [], []
+    for n, row in enumerate(rows, start=1):
+        found, cleaned = _check(conn, row.get("item_id"), row.get("warehouse_id"), row.get("quantity"),
+                                row.get("comment"), created_at)
+        problems += [f"Row {n}: {p}" for p in found]
+        values.append(cleaned)
+    if not rows:
+        problems.append("There are no rows to save.")
+    if problems:
+        raise ValidationError(problems)
+    with transaction(conn):
+        return [conn.execute(_INSERT, v).lastrowid for v in values]
 
 
 def recent_movements(conn: sqlite3.Connection, item_id: int, warehouse_id: int, limit: int = 20) -> list[dict]:

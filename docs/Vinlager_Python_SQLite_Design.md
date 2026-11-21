@@ -234,7 +234,8 @@ The title is "Wine Inventory Manager". On the left is the list of **open invoice
 | Open invoice (opens the invoice lines of the selected invoice) | Åben Faktura | **yes** |
 | Invoice details (opens the header of the selected invoice; if no invoice is selected, a new one) | Åben faktura egenskaber | **yes** |
 | Stock change (new entry) | Open Vinlager tilgange/afgange | **yes** |
-| Maintain customers, Customer list, Reopen closed invoice, Generate invoice, Wine list, Sales price list, Cost price list, Warehouses, Stock report, Advanced settings, Import stock changes, Export mailing list | Vedligehold Kundedata, List Kunder, Gen­åben lukkede faktura, Generer Faktura, Vinliste, Prisliste Salg, Prisliste Cost, Open Lager Stamdata, Vis lagerrapport, Show advanced settings, Import vinlager tilgange/afgange, Mail Liste Export | shown disabled (backlog) |
+| Mass stock registration (§6.2.1) | Import vinlager tilgange/afgange | **yes** |
+| Maintain customers, Customer list, Reopen closed invoice, Generate invoice, Wine list, Sales price list, Cost price list, Warehouses, Stock report, Advanced settings, Export mailing list | Vedligehold Kundedata, List Kunder, Gen­åben lukkede faktura, Generer Faktura, Vinliste, Prisliste Salg, Prisliste Cost, Open Lager Stamdata, Vis lagerrapport, Show advanced settings, Mail Liste Export | shown disabled (backlog) |
 | Quit | Quit | yes |
 
 In Access, the open-invoice list uses an **inner join to the customers**, so the 4 draft invoices with customer `0` do not show. The new app uses a **left join** (the default of decision 2 in §10) and shows "(no customer)", so the user can finish or delete these drafts.
@@ -251,8 +252,21 @@ The user fills in the fields in this order:
 4. Comment.
 5. Date (default now).
 
-These are the fields of the Access form; version 1 adds none (decision 14 in §10).
+These are the fields of the Access form; version 1 adds none (decision 14 in §10). The wine picker starts each row with the wine code (`item_code`, Access `Vin_UID`), for example "Code SAbSe_RA09 – Seleccion Personal 2009 (Rød, Alm)". It lists all wines, also discontinued ones, as the Access form did.
+
 Then the user clicks **Save** or **Cancel**. While the user types, the screen shows the on-hand stock now and after the change. Below the fields, it shows the 20 latest stock movements for the selected wine and warehouse.
+
+#### 6.2.1 Mass stock registration
+
+In Access, the button "Import vinlager tilgange/afgange" opened the query `qVinlager_Change_Import` as an editable grid: `SELECT Lager_ID, Vin_ID, Quantity, Kommentar FROM tVinlager WHERE Date_Create > Now()`. The filter makes the grid open empty (no row has a future date), and the user pastes many stock changes at once, usually from Excel. Each new row gets the date from the table default `Now()`. So it is a mass registration, not a file import.
+
+The new screen does the same, with the same table and fields:
+1. The user pastes rows into a text box, one stock change per row: warehouse id, wine, quantity, comment. Columns are separated by tabs (as Excel pastes them) or by semicolons. A heading row is skipped.
+2. **Wine:** the wine id (as in Access) or the wine code. A whole number that is a wine id gives that wine. Other text is looked up as a code, with upper and lower case the same. A number that is the id of one wine and the code of another wine is refused as ambiguous.
+3. **Check** shows what each row means (warehouse name, wine code and name) and lists every problem with its line number.
+4. **Save all** is possible only after a check without problems, and only while the text is unchanged. It saves **all rows or none**, in one transaction. All rows get the same date: now.
+
+The data functions are `mass_entry.check()` and `stock.add_movements()`.
 
 ### 6.3 Invoice header screen
 The fields are those in §5.4. The buttons are Save, Close invoice (sets `is_closed`) and Open lines. A new invoice must have a customer; the screen does not offer the Access default of customer `0`.
@@ -333,9 +347,10 @@ These functions of the Access app come after v1, in about this order of priority
 7. **Warehouse** master data.
 8. **Settings screen** for `settings.json`, including the PDF folder.
 9. **Stock report** (`qVinliste`) and **customer list** (`rKundeListe`).
-10. **Stock import** (`qVinlager_Change_Import`).
-11. **Excel export** (`uVinlager_Excel`).
-12. **Consistency check query.**
+10. **Excel export** (`uVinlager_Excel`).
+11. **Consistency check query.**
+
+(The stock import, `qVinlager_Change_Import`, moved into version 1 as the mass stock registration, §6.2.1.)
 
 ### 9.1 Key strategy: identity keys now, business keys later
 

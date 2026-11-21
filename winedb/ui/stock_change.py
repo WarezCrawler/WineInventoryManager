@@ -14,7 +14,7 @@ HISTORY_COLUMNS = ("created_at", "quantity", "comment")
 def _item_text(item: dict) -> str:
     """The text of a wine in the wine picker: code, name and vintage, then type and size."""
     extra = ", ".join(str(item[c]) for c in ("item_type", "bottle_size") if item[c])
-    return f"{item['item_code']} – {item['name']} {item['vintage']}" + (f" ({extra})" if extra else "")
+    return f"Code {item['item_code']} – {item['name']} {item['vintage']}" + (f" ({extra})" if extra else "")
 
 
 def _whole_number(value) -> int | float | None:
@@ -33,6 +33,7 @@ def stock_change_page():
     with ui.header().classes("items-center"):
         ui.label("Stock change").classes("text-xl font-bold")
         ui.space()
+        ui.link("Mass stock registration", "/stock-mass").classes("text-white")
         ui.link("Main menu", "/").classes("text-white")
 
     with ui.row().classes("w-full no-wrap items-start gap-8"):

@@ -12,7 +12,7 @@ NO_CUSTOMER = "(no customer)"
 LATER_BUTTONS = [
     "Maintain customers", "Customer list", "Reopen closed invoice", "Generate invoice", "Wine list",
     "Sales price list", "Cost price list", "Warehouses", "Stock report", "Advanced settings",
-    "Import stock changes", "Export mailing list",
+    "Export mailing list",
 ]
 
 
@@ -63,6 +63,7 @@ def menu_page():
             ui.button("Invoice details", on_click=open_header).props("no-caps").classes("w-full").tooltip(
                 "The details of the selected invoice. With no invoice selected: a new invoice.")
             ui.button("Stock change", on_click=lambda: ui.navigate.to("/stock-change")).props("no-caps").classes("w-full")
+            ui.button("Mass stock registration", on_click=lambda: ui.navigate.to("/stock-mass")).props("no-caps").classes("w-full")
             lines_button.bind_enabled_from(table, "selected", backward=bool)
 
             ui.separator()

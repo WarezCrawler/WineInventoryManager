@@ -11,7 +11,7 @@ from nicegui.testing import User
 
 from winedb.db import connect
 
-PAGE_MODULES = ("winedb.ui.menu", "winedb.ui.stock_change", "winedb.ui.app")
+PAGE_MODULES = ("winedb.ui.menu", "winedb.ui.stock_change", "winedb.ui.stock_mass", "winedb.ui.app")
 
 
 @pytest.fixture
@@ -121,3 +121,58 @@ async def test_stock_change_cancel_returns_to_the_menu(screen: User):
     await screen.open("/stock-change")
     screen.find("Cancel").click()
     await screen.should_see("Open invoices")
+
+
+async def test_stock_change_picker_shows_the_code(screen: User):
+    await screen.open("/stock-change")
+    options = element(screen, ui.select, "Wine").options
+    assert options[10].startswith("Code RA_10 – Rosso 2010")
+
+
+# --- Mass stock registration (step 6, Access "Import vinlager tilgange/afgange") ---
+
+async def test_menu_mass_registration_button_opens_the_screen(screen: User):
+    await screen.open("/")
+    screen.find("Mass stock registration").click()
+    await screen.should_see("Paste rows from Excel")
+
+
+async def test_mass_registration_check_then_save_all(screen: User, db):
+    before = rows(db)
+    await screen.open("/stock-mass")
+    save = element(screen, ui.button, "Save all")
+    assert not save.enabled                                   # nothing checked yet
+    element(screen, ui.textarea, "Rows").value = "Lager\tVin\tAntal\tKommentar\n1\tRA_10\t6\tDelivery\n2\t11\t-1\t"
+    screen.find("Check").click()
+    await screen.should_see("2 row(s) are correct.")
+    preview = screen.find(ui.table).elements.pop()
+    assert [(r["warehouse"], r["wine"], r["quantity"], r["status"]) for r in preview.rows] == [
+        ("Main", "RA_10 – Rosso 2010", 6, "OK"), ("Fridge", "BL_11 – Blanc 2011", -1, "OK")]
+    assert save.enabled
+    screen.find("Save all").click()
+    await screen.should_see("Saved 2 stock change(s).")
+    new = rows(db)[len(before):]
+    assert [r[:4] for r in new] == [(10, 1, 6, "Delivery"), (11, 2, -1, None)]
+    assert new[0][4] == new[1][4]                             # one date for the whole batch
+
+
+async def test_mass_registration_with_a_bad_row_saves_nothing(screen: User, db):
+    before = rows(db)
+    await screen.open("/stock-mass")
+    element(screen, ui.textarea, "Rows").value = "1\tRA_10\t6\n9\tNOPE\t0"
+    screen.find("Check").click()
+    await screen.should_see("Line 2: no warehouse has the id '9'.")
+    await screen.should_see("Line 2: no wine has the id or code 'NOPE'.")
+    assert not element(screen, ui.button, "Save all").enabled
+    assert rows(db) == before
+
+
+async def test_mass_registration_changed_text_must_be_checked_again(screen: User):
+    await screen.open("/stock-mass")
+    area = element(screen, ui.textarea, "Rows")
+    area.value = "1\tRA_10\t6"
+    screen.find("Check").click()
+    await screen.should_see("1 row(s) are correct.")
+    area.value = "1\tRA_10\t7"
+    await screen.should_see("The rows changed. Check them again.")
+    assert not element(screen, ui.button, "Save all").enabled
