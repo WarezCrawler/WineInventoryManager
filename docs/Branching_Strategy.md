@@ -6,10 +6,10 @@ Date: 2026-11-15. Replaces the "one branch at a time, always from `main`" workfl
 
 | Branch | Holds | Lifetime | Protected |
 |---|---|---|---|
-| `main` | The latest **released** version only. Every commit on `main` is a release or a hotfix. | Permanent | Yes |
-| `develop` | The next release: all planned and finished work that is not released yet. | Permanent | Yes (same CI check) |
+| `main` | The latest **released** version only. Every commit on `main` is a release or a hotfix. It takes pull requests only from `develop` and `hotfix/<name><YYMMDD>`. | Permanent | Yes |
+| `develop` | The next release: all planned and finished work that is not released yet. | Permanent | Yes (same rules as `main`, without the source branch rule) |
 | `feature/<name>` | One change, from `develop` to `develop`. | Short (days) | No |
-| `hotfix/<name>` | An urgent fix of the released version, from `main` to `main`. | Very short | No |
+| `hotfix/<name><YYMMDD>` | An urgent fix of the released version, from `main` to `main`. The name ends with the date when the branch was created, for example `hotfix/pdf-path261121`. | Very short | No |
 
 Releases are marked with a tag on `main`: `v1.0.0`, `v1.1.0`, and so on. The Windows program is built from a tag, never from `develop`.
 
@@ -36,7 +36,7 @@ Large planned changes (for example the stock ledger) are cut into steps. Each st
 
 For an error in the released version, when `develop` holds work that is not ready.
 
-1. Create `hotfix/<name>` from `main`. Fix it with a test.
+1. Create `hotfix/<name><YYMMDD>` from `main` (for example `hotfix/pdf-path261121`). Fix it with a test. Other branch names cannot merge into `main` (section 7, item 6).
 2. Pull request to `main`, squash-merge, tag `vX.Y.Z+1`.
 3. **Merge `main` back into `develop` at once** (pull request, merge commit). Do not forget this step. A fix that is only in `main` will be lost at the next release.
 
@@ -61,11 +61,12 @@ Before the release pull request:
 
 ## 7. Settings to change (repository and CI)
 
-1. **Create `develop` from `main` and protect it before the first release pull request.** Checked on 2026-11-15: one ruleset ("main: squash pull requests only") protects the default branch only. It blocks deletion and force push, requires a pull request and the `test` check, and allows squash merges only. `develop` is not covered. This matters: GitHub deletes the head branch of a merged pull request, and for a release pull request the head branch is `develop`. Add `develop` to the ruleset, or make a second ruleset for it with the same rules.
-2. **Allow merge commits in two places.** The repository setting allows squash only, and the ruleset on `main` allows squash only. Both must also allow a merge commit. Without this, a release pull request can not be merged as in section 3. A squash release is not a substitute: after it, `main` does not have the commits of `develop`, and the next release pull request can give conflicts wherever the same lines changed both before and after the release. On `develop`, allow squash (features) and merge commit (the merge back after a hotfix).
+1. **Create `develop` from `main` and protect it.** **Done 2026-11-21.** `develop` exists, and the ruleset "develop: pull requests with passing tests" protects it. It blocks deletion and force push, and requires a pull request and the `test` check. This matters: GitHub deletes the head branch of a merged pull request, and for a release pull request the head branch is `develop`.
+2. **Allow merge commits.** **Done 2026-11-21.** The repository setting allows squash and merge commits. The ruleset on `main` ("main: released work only (from develop or hotfix)") allows both, and so does the ruleset on `develop`: squash for features, and a merge commit for the merge back after a hotfix. Without merge commits, a release pull request cannot be merged as in section 3. A squash release is not a substitute: after it, `main` does not have the commits of `develop`, and the next release pull request can give conflicts wherever the same lines changed both before and after the release.
 3. **CI trigger:** `pull_request` already covers any target branch. Add `develop` to the `push` trigger, so the check also runs after a merge (done in `ci.yml`).
 4. **Keep "delete branch on merge"** on. It is already on. It does not delete a branch that a ruleset protects against deletion, which is why item 1 comes first.
 5. **Default branch:** keep `main`. A visitor of the public repository then sees the released version.
+6. **Source branch rule for `main`.** **Done 2026-11-21.** GitHub has no setting that limits the source branch of a pull request, so a CI job does it. The job `source-branch` in `ci.yml` fails a pull request to `main` unless the source is `develop` or `hotfix/<name><YYMMDD>` with a valid date. The ruleset on `main` requires this job. **Until the job is on `main`** (after the first release), a hotfix pull request does not run it and cannot merge. In that case, merge the job into `main` first, or turn off the check in the ruleset for that one merge.
 
 ## 8. Alternatives (rejected for now)
 

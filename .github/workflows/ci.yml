@@ -9,6 +9,29 @@ permissions:
   contents: read
 
 jobs:
+  # Required by the ruleset on main (docs/Branching_Strategy.md): main takes pull requests only
+  # from develop (releases) and from hotfix/<name><YYMMDD> (hotfixes). Passes for other targets.
+  source-branch:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the source branch of a pull request to main
+        env:
+          BASE: ${{ github.base_ref }}
+          HEAD: ${{ github.head_ref }}
+        run: |
+          if [ "$BASE" != "main" ]; then echo "Target is $BASE: no rule."; exit 0; fi
+          if [ "$HEAD" = "develop" ]; then echo "Release from develop: allowed."; exit 0; fi
+          if [[ "$HEAD" =~ ^hotfix/[A-Za-z0-9._-]+([0-9]{6})$ ]]; then
+            d="${BASH_REMATCH[1]}"
+            if date -d "20${d:0:2}-${d:2:2}-${d:4:2}" >/dev/null 2>&1; then
+              echo "Hotfix branch: allowed."; exit 0
+            fi
+            echo "::error::$HEAD ends with $d, which is not a valid date (YYMMDD)."; exit 1
+          fi
+          echo "::error::main takes pull requests only from develop or hotfix/<name><YYMMDD> (for example hotfix/pdf-path261121), not from $HEAD."
+          exit 1
+
   test:
     runs-on: ubuntu-latest
     steps:

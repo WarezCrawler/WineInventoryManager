@@ -200,7 +200,9 @@ amount_cost     = round(cost_price * quantity, 2)
 ### 5.3 On-hand stock (`TotalVinQ`, view `uVinlager`)
 `on_hand(item_id, warehouse_id) = SUM(stock_transactions.quantity) − SUM(invoice_lines.quantity)`, over all rows for that wine and warehouse.
 
-A stock movement with a negative quantity removes or corrects stock; 341 of the 863 stock movements are negative. Python calculates on-hand stock with two `SUM` queries. Access never stopped a sale or removal that made stock negative, so v1 does not either.
+A stock movement with a negative quantity removes or corrects stock; 341 of the 863 stock movements are negative. Python calculates on-hand stock with two `SUM` queries, in `stock.on_hand()`, which is the only place that knows the formula.
+
+**Difference from Access:** the calculation leaves out the invoice lines of soft-deleted invoices (`is_deleted = 1`), because calculations must leave out flagged invoices. Access counted them (`TotalVinQ` sums `uVinlager`, which does not filter on `Delete`). In the January 2015 export, the one soft-deleted invoice (149) has no lines, so the results are the same. Lines whose invoice row does not exist still count, as in Access. Access never stopped a sale or removal that made stock negative, so v1 does not either.
 
 ### 5.4 Invoice rules
 - **Open invoice:** an invoice with `is_closed = 0`. Invoice lines can be added or changed only on open invoices. (The Access line form uses the query `qVinlager_Salg`, which filters on `is_closed <> True`.) To close an invoice, the app sets `invoice_header.is_closed = 1`. Reopening a closed invoice is a separate screen in the backlog (§9).
@@ -299,7 +301,7 @@ Do the steps in order. Each step has a check; the step is complete when the chec
    - It creates the target database through `connect()` and refuses a target that has rows. To run the import again, delete the target file first.
 
    *Check:* the row counts are 143 / 176 / 3 / 240 / 442 / 4 / 863 / 665 / 228. The sum of `amount_ex_vat` is 326,572.40. The highest `invoice_id` is 150. There are 129 closed and 14 open invoices, and 341 stock movements with a negative quantity.
-4. **Logic and golden test.** `logic.line_amounts()` (§5.1) and `stock.on_hand()` (§5.3).
+4. **Logic and golden test.** **Done.** `logic.line_amounts()` (§5.1) and `stock.on_hand()` (§5.3). The golden tests are in `tests/test_golden.py`; they run only when `WINE_CSV_DIR` points to the CSV export.
    *Check:* pytest calculates all 665 invoice lines again from the database and gets the stored totals, with 0 mismatches. The on-hand stock for all 283 combinations of wine and warehouse matches the calculation from the CSV files. 15 of them are negative, as in the data quality report.
 5. **UI shell and main menu.** The NiceGUI app, the main menu with the list of open invoices and the buttons (§6.1), and the disabled backlog buttons.
    *Check:* the list shows the 14 open invoices (10 if the inner join is kept).
