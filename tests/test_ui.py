@@ -177,8 +177,7 @@ async def test_mass_registration_paste_from_excel_check_then_save_all(screen: Us
     screen.find("Check").click()
     await screen.should_see("2 row(s) are correct.")
     data = mass_grid(screen).options["rowData"]
-    assert [(r["warehouse_name"], r["wine_name"], r["status"]) for r in data[:2]] == [
-        ("Main", "RA_10 – Rosso 2010", "OK"), ("Fridge", "BL_11 – Blanc 2011", "OK")]
+    assert [r["status"] for r in data[:2]] == ["OK", "OK"]
     assert save.enabled
     screen.find("Save all").click()
     await screen.should_see("Saved 2 stock change(s).")
@@ -246,3 +245,18 @@ def test_the_browser_paste_handler_sends_excel_text_with_its_cell():
     from winedb.ui.stock_mass import PASTE_JS
     assert "[" + chr(92) + "t" + chr(92) + "n]" in PASTE_JS    # the regular expression for tab or line break
     assert "row-index" in PASTE_JS and "col-id" in PASTE_JS and "preventDefault" in PASTE_JS
+
+
+async def test_mass_registration_warehouse_and_wine_cells_have_lists_and_show_names(screen: User):
+    await screen.open("/stock-mass")
+    columns = {c["field"]: c for c in mass_grid(screen).options["columnDefs"]}
+    assert columns["warehouse"]["refData"] == {"1": "1 – Main", "2": "2 – Fridge"}
+    wine_names = columns["wine"]["refData"]
+    assert wine_names["RA_10"] == "RA_10 – Rosso 2010"             # a code shows its wine
+    assert wine_names["10"] == "10 = RA_10 – Rosso 2010"           # an id too
+    assert "OLD_EMPTY" not in wine_names                           # same wines as the stock change picker
+    # Double-click, Enter or F2 open the list; typing opens the text editor.
+    selector = columns["wine"][":cellEditorSelector"]
+    assert "agSelectCellEditor" in selector and "agTextCellEditor" in selector and "eventKey" in selector
+    assert '"21_fejl"' in selector and '"RA_10"' in selector
+    assert "warehouse_name" not in columns and "wine_name" not in columns

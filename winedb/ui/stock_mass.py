@@ -1,15 +1,19 @@
 """Mass stock registration (design doc §6.2.1, replaces the Access button "Import vinlager tilgange/afgange",
 which opened an editable grid). The user types into the grid or pastes a block of cells from Excel."""
+import json
+
 from nicegui import ui
 
 from winedb.db import connect
 from winedb.mass_entry import COLUMNS, blank_row, check_rows, grid_rows_to_check, is_blank, paste_into, with_new_row
-from winedb.stock import add_movements
+from winedb.masterdata import list_warehouses
+from winedb.stock import add_movements, wines_for_stock_change
 from winedb.ui.labels import label
 from winedb.validation import ValidationError
 
 HELP = ("Click a cell and paste from Excel (Ctrl+V): the copied cells fill the grid from that cell down and to the "
         "right. As in Access, the last row is always a new, empty row: the grid grows by the rows you paste or type. "
+        "Double-click a warehouse or wine cell for a list. "
         "Columns: warehouse id, wine (id or code), quantity (negative to remove stock), comment. Empty rows are "
         "ignored. All rows get today's date and time.")
 
@@ -32,16 +36,32 @@ def _column(field: str, header: str, editable: bool, **extra) -> dict:
             "cellClass": "" if editable else "bg-gray-100", **extra}
 
 
-COLUMN_DEFS = [
-    _column("line", label("line"), False, width=70),
-    _column("warehouse", "Warehouse id", True, width=120),
-    _column("wine", "Wine (id or code)", True, width=170),
-    _column("quantity", label("quantity"), True, width=110),
-    _column("comment", label("comment"), True, flex=2, minWidth=160),
-    _column("warehouse_name", label("warehouse"), False, width=140),
-    _column("wine_name", label("wine"), False, flex=2, minWidth=180),
-    _column("status", label("status"), False, flex=3, minWidth=200),
-]
+def _pick_list(values: list[str]) -> str:
+    """The cell editor for a column with a list: double-click, Enter or F2 open a dropdown list (AG Grid's
+    free select editor); typing a character opens the normal text editor, so a code or id can be typed."""
+    return ("(params) => (params.eventKey && params.eventKey.length === 1)"
+            " ? {component: 'agTextCellEditor'}"
+            f" : {{component: 'agSelectCellEditor', params: {{values: {json.dumps(values)}}}}}")
+
+
+def column_defs(warehouses: list[dict], wines: list[dict]) -> list[dict]:
+    """The grid columns. Warehouse and wine have a dropdown list, and their cells show the name next to the
+    id or code (AG Grid `refData`); the cell value itself stays the id or code that is checked and saved.
+    The wine list is the list of the stock change screen (stock.wines_for_stock_change())."""
+    warehouse_text = {str(w["warehouse_id"]): f"{w['warehouse_id']} – {w['warehouse_name'] or ''}" for w in warehouses}
+    wine_text = {str(w["item_id"]): f"{w['item_id']} = {w['item_code']} – {w['name']} {w['vintage']}" for w in wines}
+    wine_text.update({w["item_code"]: f"{w['item_code']} – {w['name']} {w['vintage']}" for w in wines})
+    tip = "Double-click (or Enter) for a list. Type to enter a value."
+    return [
+        _column("line", label("line"), False, width=70),
+        _column("warehouse", label("warehouse"), True, width=170, refData=warehouse_text, headerTooltip=tip,
+                **{":cellEditorSelector": _pick_list(list(warehouse_text))}),
+        _column("wine", "Wine (id or code)", True, flex=2, minWidth=240, refData=wine_text, headerTooltip=tip,
+                **{":cellEditorSelector": _pick_list([w["item_code"] for w in wines])}),
+        _column("quantity", label("quantity"), True, width=110),
+        _column("comment", label("comment"), True, flex=2, minWidth=160),
+        _column("status", label("status"), False, flex=3, minWidth=200),
+    ]
 
 
 @ui.page("/stock-mass")
@@ -60,9 +80,14 @@ def stock_mass_page():
         ui.button("Cancel", on_click=lambda: ui.navigate.to("/")).props("no-caps flat")
     summary = ui.label("").classes("font-bold")
 
+    conn = connect()
+    try:
+        columns = column_defs(list_warehouses(conn), wines_for_stock_change(conn))
+    finally:
+        conn.close()
     state = {"rows": with_new_row([]), "checked": False}
     grid = ui.aggrid({
-        "columnDefs": COLUMN_DEFS,
+        "columnDefs": columns,
         "rowData": state["rows"],
         "stopEditingWhenCellsLoseFocus": True,
         "enterNavigatesVertically": True,
@@ -81,8 +106,7 @@ def stock_mass_page():
         summary.text = message
 
     def clear_results(row: dict) -> None:
-        for key in ("warehouse_name", "wine_name", "status"):
-            row.pop(key, None)
+        row.pop("status", None)
 
     def on_paste(e) -> None:
         args = e.args or {}
@@ -122,8 +146,6 @@ def stock_mass_page():
             clear_results(row)
             p = by_line.get(row["line"])
             if p:
-                row["warehouse_name"] = p["warehouse"] if not p["problems"] else ""
-                row["wine_name"] = p["wine"] if " – " in str(p["wine"]) else ""
                 row["status"] = "OK" if not p["problems"] else " ".join(p["problems"])
         show()
         if not preview:
