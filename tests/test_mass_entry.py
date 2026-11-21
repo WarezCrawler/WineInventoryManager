@@ -111,7 +111,7 @@ def test_no_rows(conn):
 
 # --- the grid: paste placement and rows to check ---
 
-from winedb.mass_entry import blank_row, check_rows, grid_rows_to_check, paste_into  # noqa: E402
+from winedb.mass_entry import blank_row, check_rows, grid_rows_to_check, paste_into, with_new_row  # noqa: E402
 
 EXCEL = "Lager\tVin\tAntal\tKommentar\r\n1\t216\t6\tDelivery 42\r\n2\tSAbSe_RA09\t-2\t\r\n"
 
@@ -158,3 +158,14 @@ def test_problems_per_row_are_sentences(conn):
     _, preview, problems = check_rows(conn, [(5, ["9", "NOPE", "0", ""])])
     assert preview[0]["problems"][0] == "No warehouse has the id '9'."
     assert problems[0] == "Line 5: no warehouse has the id '9'."
+
+
+def test_the_grid_always_ends_with_one_new_row():
+    tab, nl = chr(9), chr(10)
+    assert [r["line"] for r in with_new_row([])] == [1]                       # an empty grid: only the new row
+    rows = with_new_row([blank_row(1)])
+    paste_into(rows, nl.join(tab.join(["1", "216", q]) for q in ("6", "7", "8")) + nl, 0, "warehouse")
+    with_new_row(rows)
+    assert len(rows) == 4 and rows[2]["quantity"] == "8" and rows[3]["wine"] == ""   # 3 pasted + 1 new row
+    rows += [blank_row(5), blank_row(6)]
+    assert len(with_new_row(rows)) == 4                                       # extra empty rows at the end go

@@ -217,13 +217,29 @@ async def test_mass_registration_typing_in_a_cell_and_changes_need_a_new_check(s
     assert mass_grid(screen).options["rowData"][0]["quantity"] == "7"
 
 
-async def test_mass_registration_paste_grows_the_grid_and_add_rows(screen: User):
+def lines(user: User) -> list[tuple]:
+    return [(r["line"], r["wine"]) for r in mass_grid(user).options["rowData"]]
+
+
+async def test_mass_registration_grid_is_one_new_row_and_grows_by_the_pasted_rows(screen: User):
     await screen.open("/stock-mass")
-    assert len(mass_grid(screen).options["rowData"]) == 20
-    paste(screen, excel((1, "RA_10", 1), (1, "RA_10", 2), (1, "RA_10", 3)), row=19)
-    assert len(mass_grid(screen).options["rowData"]) == 22
-    screen.find("Add 20 rows").click()
-    assert len(mass_grid(screen).options["rowData"]) == 42
+    assert lines(screen) == [(1, "")]                                   # only the new row, as in Access
+    paste(screen, excel((1, "RA_10", 1), (1, "BL_11", 2), (1, "RA_10", 3)))
+    assert lines(screen) == [(1, "RA_10"), (2, "BL_11"), (3, "RA_10"), (4, "")]   # 3 pasted + the new row
+    paste(screen, excel((2, "BL_11", 5), (2, "BL_11", 6)), row=3)      # paste into the new row
+    assert lines(screen) == [(1, "RA_10"), (2, "BL_11"), (3, "RA_10"), (4, "BL_11"), (5, "BL_11"), (6, "")]
+    screen.find("Clear").click()
+    assert lines(screen) == [(1, "")]
+
+
+async def test_mass_registration_typing_in_the_new_row_adds_the_next_new_row(screen: User):
+    await screen.open("/stock-mass")
+    edit(screen, 1, "warehouse", "1")
+    assert lines(screen) == [(1, ""), (2, "")]                          # row 1 is in use, row 2 is the new row
+    edit(screen, 1, "wine", "RA_10")
+    assert len(lines(screen)) == 2                                      # still one new row only
+    edit(screen, 2, "wine", "BL_11")
+    assert len(lines(screen)) == 3
 
 
 def test_the_browser_paste_handler_sends_excel_text_with_its_cell():

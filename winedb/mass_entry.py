@@ -114,3 +114,12 @@ def paste_into(rows: list[dict], text: str, start_row: int, start_column: str) -
 def grid_rows_to_check(rows: list[dict]) -> list[tuple[int, list[str]]]:
     """The rows that are not blank, as (line, cells) for check_rows(). Blank rows are not checked."""
     return [(row["line"], [str(row.get(c) or "") for c in COLUMNS]) for row in rows if not is_blank(row)]
+
+
+def with_new_row(rows: list[dict]) -> list[dict]:
+    """End the grid with exactly one empty row, the new row, as in an Access datasheet. Empty rows at the
+    end are removed first, so the grid is as long as its content plus one. Changes `rows` in place."""
+    while rows and is_blank(rows[-1]):
+        rows.pop()
+    rows.append(blank_row(len(rows) + 1))
+    return rows

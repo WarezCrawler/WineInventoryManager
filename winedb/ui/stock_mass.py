@@ -3,15 +3,15 @@ which opened an editable grid). The user types into the grid or pastes a block o
 from nicegui import ui
 
 from winedb.db import connect
-from winedb.mass_entry import COLUMNS, blank_row, check_rows, grid_rows_to_check, paste_into
+from winedb.mass_entry import COLUMNS, blank_row, check_rows, grid_rows_to_check, is_blank, paste_into, with_new_row
 from winedb.stock import add_movements
 from winedb.ui.labels import label
 from winedb.validation import ValidationError
 
-START_ROWS = 20
 HELP = ("Click a cell and paste from Excel (Ctrl+V): the copied cells fill the grid from that cell down and to the "
-        "right, and the grid grows when needed. You can also type in the cells. Columns: warehouse id, wine (id or "
-        "code), quantity (negative to remove stock), comment. Empty rows are ignored. All rows get today's date and time.")
+        "right. As in Access, the last row is always a new, empty row: the grid grows by the rows you paste or type. "
+        "Columns: warehouse id, wine (id or code), quantity (negative to remove stock), comment. Empty rows are "
+        "ignored. All rows get today's date and time.")
 
 # The grid gets the paste from the browser: AG Grid's own paste of many cells is an Enterprise feature.
 # Text with a tab or a line break (anything copied from Excel) is sent to the server with the row and the
@@ -56,12 +56,11 @@ def stock_mass_page():
     with ui.row():
         check_button = ui.button("Check").props("no-caps")
         save_button = ui.button("Save all").props("no-caps")
-        add_button = ui.button("Add 20 rows").props("no-caps flat")
         clear_button = ui.button("Clear").props("no-caps flat")
         ui.button("Cancel", on_click=lambda: ui.navigate.to("/")).props("no-caps flat")
     summary = ui.label("").classes("font-bold")
 
-    state = {"rows": [blank_row(n) for n in range(1, START_ROWS + 1)], "checked": False}
+    state = {"rows": with_new_row([]), "checked": False}
     grid = ui.aggrid({
         "columnDefs": COLUMN_DEFS,
         "rowData": state["rows"],
@@ -88,6 +87,7 @@ def stock_mass_page():
     def on_paste(e) -> None:
         args = e.args or {}
         ignored = paste_into(state["rows"], args.get("text", ""), int(args.get("row") or 0), args.get("col") or "")
+        with_new_row(state["rows"])
         for row in state["rows"]:
             clear_results(row)
         show()
@@ -103,6 +103,12 @@ def stock_mass_page():
         row = state["rows"][line - 1]
         row[field] = "" if args.get("newValue") is None else str(args.get("newValue"))
         clear_results(row)
+        if line == len(state["rows"]) and not is_blank(row):
+            # The user typed into the new row: add the next new row without redrawing the grid.
+            new = blank_row(line + 1)
+            state["rows"].append(new)
+            grid.options["rowData"] = state["rows"]
+            grid.run_grid_method("applyTransaction", {"add": [new]})
         not_checked("The rows changed. Check them before you save.")
 
     def run_check() -> bool:
@@ -146,16 +152,12 @@ def stock_mass_page():
             return
         conn.close()
         ui.notify(f"{len(to_save)} stock change(s) are saved.", type="positive")
-        state["rows"] = [blank_row(n) for n in range(1, START_ROWS + 1)]
+        state["rows"] = with_new_row([])
         show()
         not_checked(f"Saved {len(to_save)} stock change(s).")
 
-    def add_rows() -> None:
-        state["rows"] += [blank_row(len(state["rows"]) + n) for n in range(1, 21)]
-        show()
-
     def clear_all() -> None:
-        state["rows"] = [blank_row(n) for n in range(1, START_ROWS + 1)]
+        state["rows"] = with_new_row([])
         show()
         not_checked("")
 
@@ -163,5 +165,4 @@ def stock_mass_page():
     grid.on("cellValueChanged", on_edit)
     check_button.on_click(run_check)
     save_button.on_click(save_all)
-    add_button.on_click(add_rows)
     clear_button.on_click(clear_all)
