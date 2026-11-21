@@ -19,6 +19,13 @@ LABELS = {
     "created_at": "Date",
     "quantity": "Quantity",
     "comment": "Comment",
+    "invoice_date": "Invoice date",
+    "hide_subtotals": "Hide subtotals",
+    "is_closed": "Closed",
+    "address": "Address",
+    "postal_code": "Postal code",
+    "city": "City",
+    "phone": "Phone",
     # Columns of the mass registration preview (not database columns)
     "line": "Line",
     "warehouse": "Warehouse",

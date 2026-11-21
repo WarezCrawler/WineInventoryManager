@@ -4,7 +4,7 @@ This page shows the plan on one page: what each version contains, in which order
 
 | Version | Goal | Status |
 |---|---|---|
-| **1** | Replace the Access app. Copy its functions and data with minimal change. | In progress: step 6 of 9 |
+| **1** | Replace the Access app. Copy its functions and data with minimal change. | In progress: step 8 of 10 |
 | **1.x** | The Access functions that are not in version 1 (backlog). | Not started |
 | **2** | Modules, a real stock ledger, stock count, orders and deliveries. | Designed, not started |
 | **3** | Accounting, with accounts receivable and banking as optional modules. | Outline only |
@@ -24,8 +24,8 @@ This page shows the plan on one page: what each version contains, in which order
 | 3 | One-time import from Access, checked against the source | Done |
 | 4 | Line amounts and on-hand stock, golden tests on the real data | Done |
 | 5 | Main menu with the list of open invoices | Done |
-| 6 | Stock change screen (the fields of the Access form) and mass stock registration (the Access "Import vinlager tilgange/afgange" grid) | In progress |
-| 7 | Invoice header screen (create, edit, delete flag, close) | Not started |
+| 6 | Stock change screen (the fields of the Access form) and mass stock registration (the Access "Import vinlager tilgange/afgange" grid) | Done |
+| 7 | Invoice header screen (create, edit, delete flag, close) | Done |
 | 8 | Invoice lines screen | Not started |
 | 9 | Invoice preview and PDF (replaces the Access report `rFaktura`) | Not started |
 | 10 | End-to-end test and parallel run with Access | Not started |
@@ -41,8 +41,8 @@ Version 1 copies Access, but not exactly. Each difference below is either decide
 | 2 | Settings are in `settings.json`, not in a table. The database and `settings.json` stay next to the program. | Configuration is not business data; owner decision 2026-11-21 | Done |
 | 3 | The open-invoice list also shows invoices without a customer, as "(no customer)". Access hid them. | So these drafts can be finished or deleted | Done (default of decision 2) |
 | 4 | Stock leaves out the lines of soft-deleted invoices. Access counted them. | Your rule: calculations leave out flagged rows. No effect on the current data. | Done |
-| 5 | A new invoice must have a customer. Access allowed customer 0. | Prevents new drafts without a customer | Planned, step 7 |
-| 6 | The invoice date is filled in with today. Access left it blank. | Default of decision 3 | Planned, step 7 |
+| 5 | A new invoice must have a customer. Access allowed customer 0. | Prevents new drafts without a customer | Done |
+| 6 | The invoice date is filled in with today. Access left it blank. | Default of decision 3 | Done |
 | 7 | Inputs are checked when saved (for example: the quantity must be a whole number other than 0). Old rows are never checked. | Prevents new bad data | In step 6 |
 | 8 | The stock change picker hides discontinued wines whose total stock is 0, and marks the others "(discontinued)". Access listed all wines. | Fewer wrong picks; stock on a discontinued wine can still be corrected | Done (owner decision) |
 | 9 | Mass stock registration also accepts the wine code, not only the wine id. | Users know the code better | Done (owner decision) |

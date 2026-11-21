@@ -9,7 +9,7 @@ Status: **Done** = built, **v1** = planned for the first release, **Later** = ba
 ## 1. Main menu (§6.1)
 - 1.1 List of open invoices (newest first) with invoice no., customer no. and customer name; invoices without a customer show "(no customer)", and soft-deleted invoices are marked: **Done**
 - 1.2 Open invoice lines for the selected invoice: **v1**
-- 1.3 Open invoice header for the selected invoice, or create a new one: **v1**
+- 1.3 Open invoice header for the selected invoice, or create a new one: **Done**
 - 1.4 Open stock adjustment: **v1**
 - 1.5 Open customer list: **Later**
 - 1.6 Open current stock report: **Later**
@@ -17,16 +17,16 @@ Status: **Done** = built, **v1** = planned for the first release, **Later** = ba
 - 1.8 Quit: **Done**
 
 ## 2. Stock adjustment (§6.2, §5.3)
-- 2.1 Add or remove stock for a wine and warehouse (signed quantity, comment, date; the fields of the Access form): **v1**
-- 2.2 Show current stock and stock after the change, and the latest movements: **v1**
-- 2.3 Mass stock registration: an editable grid; paste many stock changes from Excel or type them (warehouse, wine id or code, quantity, comment), check, then save all or nothing (replaces the Access button "Import vinlager tilgange/afgange", §6.2.1): **v1**
+- 2.1 Add or remove stock for a wine and warehouse (signed quantity, comment, date; the fields of the Access form): **Done**
+- 2.2 Show current stock and stock after the change, and the latest movements: **Done**
+- 2.3 Mass stock registration: an editable grid; paste many stock changes from Excel or type them (warehouse, wine id or code, quantity, comment), check, then save all or nothing (replaces the Access button "Import vinlager tilgange/afgange", §6.2.1): **Done**
 - 2.4 Structured stock count: a count session per warehouse, counted quantity per wine, differences shown and booked in one step (after the stock ledger, see [Design_Evaluation.md](Design_Evaluation.md) step 2b.1): **Later**
 
 ## 3. Manage open invoices
-- 3.1 Create an invoice and edit its header: **v1** (§6.3)
+- 3.1 Create an invoice and edit its header: **Done** (§6.3)
 - 3.2 Add and edit invoice lines with live price, VAT and discount calculation: **v1** (§5.1, §6.4)
-- 3.3 Close an invoice (it becomes read-only): **v1**
-- 3.4 Soft delete an invoice (flagged, never removed): **v1**
+- 3.3 Close an invoice (it becomes read-only): **Done**
+- 3.4 Soft delete an invoice (flagged, never removed): **Done**
 
 ## 4. Closed invoices
 - 4.1 Reopen a closed invoice: **Later**

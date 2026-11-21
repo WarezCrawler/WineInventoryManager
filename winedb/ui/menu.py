@@ -57,7 +57,7 @@ def menu_page():
 
             def open_header() -> None:
                 inv = selected()
-                _not_built(f"The header of invoice {inv['invoice_id']}" if inv else "A new invoice", 7)
+                ui.navigate.to(f"/invoice/{inv['invoice_id']}" if inv else "/invoice/new")
 
             lines_button = ui.button("Open invoice", on_click=open_lines).props("no-caps").classes("w-full")
             ui.button("Invoice details", on_click=open_header).props("no-caps").classes("w-full").tooltip(

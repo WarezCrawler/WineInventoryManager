@@ -274,7 +274,12 @@ The new screen does the same, with the same table and fields. It is an editable 
 The data functions are `mass_entry.paste_into()`, `mass_entry.check_rows()` and `stock.add_movements()`.
 
 ### 6.3 Invoice header screen
-The fields are those in §5.4. The buttons are Save, Close invoice (sets `is_closed`) and Open lines. A new invoice must have a customer; the screen does not offer the Access default of customer `0`.
+The screen is at `/invoice/new` and `/invoice/<number>`; the main menu button "Invoice details" opens the selected invoice, or a new one. The fields are those in §5.4:
+- **Customer:** a picker with the customers that are not hidden, sorted by name; typing searches the name (Access: the combo box and the "contains" search). The customer's address, postal code, city and phone are shown read-only. A new invoice must have a customer; the Access default of customer `0` is not offered. An old draft with customer 0 shows "(no customer)" and can still be changed in other fields.
+- **Default warehouse** (optional, as in Access), **invoice date** (a calendar; today for a new invoice, decision 3; stored as `YYYY-MM-DD 00:00:00` like Access), **comment**, **hide subtotals**.
+- **Delete:** the soft-delete flag. Setting it shows the Access warning in English: "Be aware that this invoice will be suppressed, and must have zero quantity and amounts!"
+
+Buttons: **Save** (saves only the changed fields), **Close invoice** (asks first, saves open changes, then sets `is_closed = 1` and nothing else, decision 8), **Open lines** (step 8), **Back**. A closed invoice opens read-only. The data functions are `invoices.create_header()`, `update_header()`, `set_deleted()` and `close()`; only `set_deleted()` and `close()` change the status of an invoice.
 
 ### 6.4 Invoice lines screen
 - **Top:** invoice number, customer, date and the `is_closed` toggle ("Close invoice?"; Access: "Luk faktura?").
@@ -329,9 +334,9 @@ Do the steps in order. Each step has a check; the step is complete when the chec
    *Check:* pytest calculates all 665 invoice lines again from the database and gets the stored totals, with 0 mismatches. The on-hand stock for all 283 combinations of wine and warehouse matches the calculation from the CSV files. 15 of them are negative, as in the data quality report.
 5. **UI shell and main menu.** **Done.** The main menu is `winedb/ui/menu.py`, and the table browser moved to `/tables`. The buttons for steps 6–8 show a message until those screens exist. The NiceGUI app, the main menu with the list of open invoices and the buttons (§6.1), and the disabled backlog buttons.
    *Check:* the list shows the 14 open invoices (10 if the inner join is kept).
-6. **Stock change screen** (§6.2).
+6. **Stock change screen** (§6.2). **Done.**
    *Check:* a stock change of +6 and then one of −2 change the on-hand stock by +4. They write two rows to `stock_transactions` with the correct `created_at`.
-7. **Invoice header screen** (§5.4, §6.3).
+7. **Invoice header screen** (§5.4, §6.3). **Done.**
    *Check:* create an invoice, change it, set the delete flag and close it. The row in `invoice_header` is the same as Access would store it.
 8. **Invoice lines screen** (§5.2, §6.4).
    *Check:* enter three historical invoices again: one with a `discount`, one with 0% VAT and one with a negative quantity. The new invoice lines have the same values as the stored ones. Closed invoices are read-only.
