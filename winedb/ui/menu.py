@@ -1,4 +1,4 @@
-"""Main menu (design doc §6.1, replaces the Access form fNavigation)."""
+"""Main menu (design doc §6.1, replaces the Access form fNavigation). All text is British English."""
 from nicegui import app, ui
 
 from winedb.config import app_dir
@@ -6,13 +6,13 @@ from winedb.db import connect
 from winedb.invoices import open_invoices
 from winedb.ui.labels import label
 
-NO_CUSTOMER = "(ingen kunde)"
+NO_CUSTOMER = "(no customer)"
 
-# Access buttons that come after v1 (design doc §9). They are shown, but disabled.
+# The Access buttons that come after v1 (design doc §9). They are shown, but disabled.
 LATER_BUTTONS = [
-    "Vedligehold Kundedata", "List Kunder", "Genåben lukkede faktura", "Generer Faktura", "Vinliste",
-    "Prisliste Salg", "Prisliste Cost", "Open Lager Stamdata", "Vis lagerrapport", "Show advanced settings",
-    "Import vinlager tilgange/afgange", "Mail Liste Export",
+    "Maintain customers", "Customer list", "Reopen closed invoice", "Generate invoice", "Wine list",
+    "Sales price list", "Cost price list", "Warehouses", "Stock report", "Advanced settings",
+    "Import stock changes", "Export mailing list",
 ]
 
 
@@ -22,7 +22,7 @@ def _rows() -> list[dict]:
         invoices = open_invoices(conn)
     finally:
         conn.close()
-    return [{**r, "customer_name": r["customer_name"] or NO_CUSTOMER, "is_deleted": "Ja" if r["is_deleted"] else ""}
+    return [{**r, "customer_name": r["customer_name"] or NO_CUSTOMER, "is_deleted": "Yes" if r["is_deleted"] else ""}
             for r in invoices]
 
 
@@ -36,7 +36,7 @@ def menu_page():
         logo = app_dir() / "logo.png"  # optional and not in git: the company logo, next to the program
         if logo.exists():
             ui.image(str(logo)).classes("w-12")
-        ui.label("Lagerstyring i særklasse").classes("text-xl font-bold")
+        ui.label("Wine Inventory Manager").classes("text-xl font-bold")
         ui.space()
         ui.link("Tables", "/tables").classes("text-white")
 
@@ -59,9 +59,10 @@ def menu_page():
                 inv = selected()
                 _not_built(f"The header of invoice {inv['invoice_id']}" if inv else "A new invoice", 7)
 
-            lines_button = ui.button("Åben Faktura", on_click=open_lines).props("no-caps").classes("w-full")
-            ui.button("Åben faktura egenskaber", on_click=open_header).props("no-caps").classes("w-full")
-            ui.button("Open Vinlager tilgange/afgange",
+            lines_button = ui.button("Open invoice", on_click=open_lines).props("no-caps").classes("w-full")
+            ui.button("Invoice details", on_click=open_header).props("no-caps").classes("w-full").tooltip(
+                "The details of the selected invoice. With no invoice selected: a new invoice.")
+            ui.button("Stock change",
                       on_click=lambda: _not_built("The stock change screen", 6)).props("no-caps").classes("w-full")
             lines_button.bind_enabled_from(table, "selected", backward=bool)
 

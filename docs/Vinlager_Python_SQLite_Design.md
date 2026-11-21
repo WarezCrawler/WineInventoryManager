@@ -36,6 +36,7 @@ The plan follows [access-analysis/Vinlager_Python_Rebuild_Plan.md](access-analys
 - **All logic is in Python:** price, VAT and discount calculation, on-hand stock, defaults, validation and workflow.
 - **No foreign keys in v1, on purpose.** Access enforced none, and the data has orphan rows: 4 invoices point to customer 0 (invoice ids 6, 54, 59 and 108). Foreign keys would stop the 1:1 load.
 - **Plain SQL, no ORM.** The app uses Python's built-in `sqlite3` with parameterised queries.
+- **Language: British English** for the UI, the program code and the database structure (table, column and index names). The data is never translated: values such as `Rød`, `Alm`, `Tilbud`, `Frankrig` and the warehouse names stay exactly as they are in Access. Access object names (`fNavigation`, `tVinlager`) appear in this document only as references to the source.
 - **The UI is separate from the logic.** The UI only calls functions in `stock.py` and `invoices.py`, so the UI toolkit can be replaced without changes to the logic.
 
 ## 3. Stack decisions
@@ -226,17 +227,17 @@ For the selected wine and warehouse, the screen shows the wine's name, vintage, 
 ## 6. Screens
 
 ### 6.1 Main menu (from `fNavigation`)
-The title is "Lagerstyring i særklasse", with the logo `export/assets/VinotrentinoLogo.png`. On the left is the list of **open invoices** (`is_closed <> 1`), newest first, with the invoice number, customer number and customer name. The buttons keep their original captions:
+The title is "Wine Inventory Manager". On the left is the list of **open invoices** (`is_closed <> 1`), newest first, with the invoice number, customer number and customer name. All text in the app is British English, so the buttons have English captions; the table shows the Access caption for reference:
 
-| Button | In v1 |
-|---|---|
-| Åben Faktura (opens the invoice lines for the selected invoice) | **yes** |
-| Åben faktura egenskaber (opens the header of the selected invoice; if no invoice is selected, a new one) | **yes** |
-| Open Vinlager tilgange/afgange (stock change, new entry) | **yes** |
-| Vedligehold Kundedata, List Kunder, Gen­åben lukkede faktura, Generer Faktura, Vinliste, Prisliste Salg, Prisliste Cost, Open Lager Stamdata, Vis lagerrapport, Show advanced settings, Import vinlager tilgange/afgange, Mail Liste Export | shown disabled (backlog) |
-| Quit | yes |
+| Button | Access caption | In v1 |
+|---|---|---|
+| Open invoice (opens the invoice lines of the selected invoice) | Åben Faktura | **yes** |
+| Invoice details (opens the header of the selected invoice; if no invoice is selected, a new one) | Åben faktura egenskaber | **yes** |
+| Stock change (new entry) | Open Vinlager tilgange/afgange | **yes** |
+| Maintain customers, Customer list, Reopen closed invoice, Generate invoice, Wine list, Sales price list, Cost price list, Warehouses, Stock report, Advanced settings, Import stock changes, Export mailing list | Vedligehold Kundedata, List Kunder, Gen­åben lukkede faktura, Generer Faktura, Vinliste, Prisliste Salg, Prisliste Cost, Open Lager Stamdata, Vis lagerrapport, Show advanced settings, Import vinlager tilgange/afgange, Mail Liste Export | shown disabled (backlog) |
+| Quit | Quit | yes |
 
-In Access, the open-invoice list uses an **inner join to the customers**, so the 4 draft invoices with customer `0` do not show. The new app uses a **left join** (the default of decision 2 in §10) and shows "(ingen kunde)", so the user can finish or delete these drafts.
+In Access, the open-invoice list uses an **inner join to the customers**, so the 4 draft invoices with customer `0` do not show. The new app uses a **left join** (the default of decision 2 in §10) and shows "(no customer)", so the user can finish or delete these drafts.
 
 Two more details of the list:
 - A soft-deleted invoice that is not closed stays in the list, marked in the column "Deleted", so that the user can find it and remove the flag.
@@ -257,7 +258,7 @@ Then the user clicks **Save** or **Cancel**. While the user types, the screen sh
 The fields are those in §5.4. The buttons are Save, Close invoice (sets `is_closed`) and Open lines. A new invoice must have a customer; the screen does not offer the Access default of customer `0`.
 
 ### 6.4 Invoice lines screen
-- **Top:** invoice number, customer, date and the `is_closed` toggle ("Luk faktura?").
+- **Top:** invoice number, customer, date and the `is_closed` toggle ("Close invoice?"; Access: "Luk faktura?").
 - **Grid:** the invoice lines of the invoice, with wine, quantity, unit price, discount, price type, VAT rate, and the totals with and without VAT.
 - **Entry panel:** wine search (type the start of the `item_code`, then pick), `quantity`, sales price picker and manual price, `discount`, VAT rate, cost price picker, `comment`, warehouse, and the on-hand stock in that warehouse. All three line amounts update while the user types, with the formulas in §5.1.
 - **Buttons:** Save, Undo, Delete line, New line.

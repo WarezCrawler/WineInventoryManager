@@ -117,7 +117,7 @@ The migration tool is a separate tool in the repo (`migrate/`). To run it: `pyth
 - Power BI has no built-in connector for SQLite. Connect through the **SQLite ODBC driver (64-bit)** in Import mode, and refresh by hand in Power BI Desktop. This is sufficient for this size of data.
 - Automatic refresh in the cloud needs an on-premises gateway with the same driver. If that is important, consider Postgres again: it has a built-in connector and DirectQuery.
 - Power BI reads only the reporting views, never the tables, so the VAT and discount logic is defined in one place.
-- When a database exists, the Power BI modeling tools can build the model.
+- When a database exists, the Power BI modelling tools can build the model.
 
 ## 8. Build order
 
