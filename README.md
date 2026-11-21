@@ -35,9 +35,11 @@ For development, run from source instead: `python -m pip install -r requirements
 
 ## Contributing
 
-`main` is protected. All changes go through a pull request that is **squash-merged**, and the `test` check must pass.
+Work goes into `develop` through pull requests; `main` holds released versions only (see [docs/Branching_Strategy.md](docs/Branching_Strategy.md)). Both branches are protected, and the `test` check must pass. Before each pull request, run the tests and `build.ps1`.
 
 ```
-python -m pip install pytest
+python -m pip install -r requirements-test.txt
 python -m pytest
 ```
+
+The tests include click-through tests of the screens (`tests/test_ui.py`, NiceGUI's simulated user, no browser needed). The golden tests on the real data run only when `WINE_CSV_DIR` points to the Access CSV export.
