@@ -236,7 +236,11 @@ The title is "Lagerstyring i særklasse", with the logo `export/assets/Vinotrent
 | Vedligehold Kundedata, List Kunder, Gen­åben lukkede faktura, Generer Faktura, Vinliste, Prisliste Salg, Prisliste Cost, Open Lager Stamdata, Vis lagerrapport, Show advanced settings, Import vinlager tilgange/afgange, Mail Liste Export | shown disabled (backlog) |
 | Quit | yes |
 
-In Access, the open-invoice list uses an **inner join to the customers**, so the 4 draft invoices with customer `0` do not show. **Open decision** (decision 2 in §10): use a left join and show "(ingen kunde)", so the user can finish or delete these drafts (recommended), or keep the Access behaviour.
+In Access, the open-invoice list uses an **inner join to the customers**, so the 4 draft invoices with customer `0` do not show. The new app uses a **left join** (the default of decision 2 in §10) and shows "(ingen kunde)", so the user can finish or delete these drafts.
+
+Two more details of the list:
+- A soft-deleted invoice that is not closed stays in the list, marked in the column "Deleted", so that the user can find it and remove the flag.
+- The logo is not in the public repo. The app shows `logo.png` in the header only if that file is next to the program.
 
 ### 6.2 Stock change screen
 The user fills in the fields in this order:
@@ -303,7 +307,7 @@ Do the steps in order. Each step has a check; the step is complete when the chec
    *Check:* the row counts are 143 / 176 / 3 / 240 / 442 / 4 / 863 / 665 / 228. The sum of `amount_ex_vat` is 326,572.40. The highest `invoice_id` is 150. There are 129 closed and 14 open invoices, and 341 stock movements with a negative quantity.
 4. **Logic and golden test.** **Done.** `logic.line_amounts()` (§5.1) and `stock.on_hand()` (§5.3). The golden tests are in `tests/test_golden.py`; they run only when `WINE_CSV_DIR` points to the CSV export.
    *Check:* pytest calculates all 665 invoice lines again from the database and gets the stored totals, with 0 mismatches. The on-hand stock for all 283 combinations of wine and warehouse matches the calculation from the CSV files. 15 of them are negative, as in the data quality report.
-5. **UI shell and main menu.** The NiceGUI app, the main menu with the list of open invoices and the buttons (§6.1), and the disabled backlog buttons.
+5. **UI shell and main menu.** **Done.** The main menu is `winedb/ui/menu.py`, and the table browser moved to `/tables`. The buttons for steps 6–8 show a message until those screens exist. The NiceGUI app, the main menu with the list of open invoices and the buttons (§6.1), and the disabled backlog buttons.
    *Check:* the list shows the 14 open invoices (10 if the inner join is kept).
 6. **Stock change screen** (§6.2).
    *Check:* a stock change of +6 and then one of −2 change the on-hand stock by +4. They write two rows to `stock_transactions` with the correct `created_at`.
@@ -357,8 +361,8 @@ These functions of the Access app come after v1, in about this order of priority
 
 | # | Item | Default if not decided |
 |---|---|---|
-| 1 | UI toolkit: NiceGUI or PySide6 | NiceGUI |
-| 2 | Open-invoice list: inner join (as in Access) or left join (also shows the 4 drafts with customer 0) | Left join |
+| 1 | UI toolkit: NiceGUI or PySide6 | NiceGUI (used from step 5) |
+| 2 | Open-invoice list: inner join (as in Access) or left join (also shows the 4 drafts with customer 0) | Left join (used from step 5) |
 | 3 | `invoice_date`: the Access form has no default. Fill in today's date, or leave it blank as in Access? | Fill in today, the user can change it |
 | 4 | A wine can have more than one `Standard` cost row (not checked in the data) | Use the lowest `cost_price_id` and log a warning |
 | 5 | Warn when a sale or removal makes the stock negative? Access never warned, and 15 combinations of wine and warehouse are already negative. | No warning in v1 |

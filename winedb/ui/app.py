@@ -1,4 +1,5 @@
-"""Table browser and import dialog (NiceGUI). Start with `python -m winedb`."""
+"""Program start, table browser and import dialog (NiceGUI). Start with `python -m winedb`.
+The main menu is in menu.py."""
 import argparse
 import sys
 
@@ -8,6 +9,7 @@ from migrate.import_accdb import import_accdb
 from winedb.browse import table_counts, table_view
 from winedb.config import app_dir, db_path
 from winedb.db import connect
+from winedb.ui import menu  # noqa: F401  (registers the main menu page "/")
 
 
 def _load(name: str | None):
@@ -63,7 +65,7 @@ def _import_dialog() -> None:
             report.set_visibility(bool(outcome.report))
             if outcome.ok:
                 close.text = "Show the tables"
-                close.on_click(lambda: ui.navigate.to("/"))
+                close.on_click(lambda: ui.navigate.to("/tables"))
             else:
                 go.enable()
 
@@ -73,7 +75,7 @@ def _import_dialog() -> None:
     dialog.open()
 
 
-@ui.page("/")
+@ui.page("/tables")
 @ui.page("/table/{name}")
 def table_page(name: str | None = None):
     counts, selected, view = _load(name)
@@ -81,6 +83,8 @@ def table_page(name: str | None = None):
     with ui.header().classes("items-center"):
         ui.label("Wine Inventory Manager").classes("text-lg font-bold")
         ui.label(str(db_path())).classes("text-xs opacity-70")
+        ui.space()
+        ui.link("Main menu", "/").classes("text-white")
 
     with ui.left_drawer().classes("bg-slate-100"):
         ui.label("Tables").classes("font-bold")

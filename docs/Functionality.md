@@ -7,14 +7,14 @@ Rows are never deleted. Where a delete function exists (today only invoices) it 
 Status: **Done** = built, **v1** = planned for the first release, **Later** = backlog (after v1).
 
 ## 1. Main menu (§6.1)
-- 1.1 List of open invoices (newest first) with invoice no., customer no. and customer name: **v1**
+- 1.1 List of open invoices (newest first) with invoice no., customer no. and customer name; invoices without a customer show "(ingen kunde)", and soft-deleted invoices are marked: **Done**
 - 1.2 Open invoice lines for the selected invoice: **v1**
 - 1.3 Open invoice header for the selected invoice, or create a new one: **v1**
 - 1.4 Open stock adjustment: **v1**
 - 1.5 Open customer list: **Later**
 - 1.6 Open current stock report: **Later**
-- 1.7 Buttons for the Later functions shown disabled: **v1**
-- 1.8 Quit: **v1**
+- 1.7 Buttons for the Later functions shown disabled: **Done**
+- 1.8 Quit: **Done**
 
 ## 2. Stock adjustment (§6.2, §5.3)
 - 2.1 Add or remove stock for a wine and warehouse (type of change, signed quantity, comment, date): **v1**
@@ -65,5 +65,5 @@ Status: **Done** = built, **v1** = planned for the first release, **Later** = ba
 - 10.1 Table browser: lists the tables and shows their rows: **Done**
 - 10.2 Runs as a Windows program (`build.ps1`, own window): **Done**
 - 10.3 Backup routine and logins: **Later**
-- 10.4 User-friendly column names in the front-end, in every list, grid and form (for example "Customer name" instead of `customer_name`, "Amount excl. VAT" instead of `amount_ex_vat`). The database names stay technical; the labels are defined in one place, so a name can be changed without touching the screens. The table browser shows the technical names until this is done: **v1**
+- 10.4 User-friendly column names in the front-end, in every list, grid and form (for example "Customer name" instead of `customer_name`, "Amount excl. VAT" instead of `amount_ex_vat`). The database names stay technical; the labels are defined in one place, so a name can be changed without touching the screens. The labels are in `winedb/ui/labels.py`; the main menu uses them. The table browser shows the technical names until this is done: **v1**
 - 10.5 All front-end code lives in one folder (`winedb/ui`), the only place that uses the UI libraries, so the UI toolkit can be replaced without touching the data and business code (checked by a test): **Done**

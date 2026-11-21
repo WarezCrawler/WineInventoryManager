@@ -13,6 +13,7 @@ import pytest
 
 from migrate.load_csv import load
 from winedb.db import connect
+from winedb.invoices import open_invoices
 from winedb.logic import LineAmounts, line_amounts
 from winedb.stock import on_hand
 
@@ -69,3 +70,10 @@ def test_on_hand_matches_a_calculation_from_the_csv_files(conn):
     assert calculated == expected
     negative = sum(v < 0 for v in calculated.values())
     print(f"\n{len(calculated)} combinations of wine and warehouse, {negative} with negative on-hand stock")
+
+
+def test_open_invoice_list_has_every_open_invoice(conn):
+    # Design doc §8 step 5: with the left join, every invoice that is not closed is in the list.
+    expected = sorted((int(r["Fakt_ID"]) for r in read_csv("tFaktura") if r["Lukket"] != "True"), reverse=True)
+    assert [r["invoice_id"] for r in open_invoices(conn)] == expected
+    print(f"\n{len(expected)} open invoices")
