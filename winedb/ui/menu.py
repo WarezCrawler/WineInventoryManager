@@ -10,7 +10,7 @@ NO_CUSTOMER = "(no customer)"
 
 # The Access buttons that come after v1 (design doc §9). They are shown, but disabled.
 LATER_BUTTONS = [
-    "Maintain customers", "Customer list", "Reopen closed invoice", "Generate invoice", "Wine list",
+    "Maintain customers", "Customer list", "Reopen closed invoice", "Wine list",
     "Sales price list", "Cost price list", "Warehouses", "Stock report", "Advanced settings",
     "Export mailing list",
 ]
@@ -58,10 +58,14 @@ def menu_page():
             lines_button = ui.button("Open invoice", on_click=open_lines).props("no-caps").classes("w-full")
             ui.button("Invoice details", on_click=open_header).props("no-caps").classes("w-full").tooltip(
                 "The details of the selected invoice. With no invoice selected: a new invoice.")
+            invoice_button = ui.button("Generate invoice", on_click=lambda: ui.navigate.to(
+                f"/invoice/{selected()['invoice_id']}/preview")).props("no-caps").classes("w-full").tooltip(
+                "Preview the selected invoice and create its PDF")
             ui.button("Stock change", on_click=lambda: ui.navigate.to("/stock-change")).props("no-caps").classes("w-full")
             ui.button("Mass stock registration", on_click=lambda: ui.navigate.to("/stock-mass")).props("no-caps").classes("w-full")
-            lines_button.disable()
-            table.on_select(lambda e: lines_button.set_enabled(bool(e.selection)))
+            for button in (lines_button, invoice_button):
+                button.disable()
+            table.on_select(lambda e: [b.set_enabled(bool(e.selection)) for b in (lines_button, invoice_button)])
 
             ui.separator()
             for caption in LATER_BUTTONS:

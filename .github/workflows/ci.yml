@@ -40,7 +40,7 @@ jobs:
       # The repo is public: personal and business data must never be tracked.
       - name: No data files tracked
         run: |
-          if git ls-files | grep -i -E '\.(accdb|laccdb|mdb|csv|db|sqlite3?|dump)$'; then
+          if git ls-files | grep -i -E '\.(accdb|laccdb|mdb|csv|db|sqlite3?|dump|pdf)$'; then
             echo "Data files must not be committed (see .gitignore)"; exit 1
           fi
 

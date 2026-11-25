@@ -116,3 +116,64 @@ def test_every_historical_line_entered_again_gives_the_stored_amounts(tmp_path):
     allowed = ("quantity other than 0", "Enter the quantity", "Choose a warehouse", "Choose a wine")
     assert all(any(reason in why for reason in allowed) for _, why in refused), refused
     print(f"\n{len(old) - len(refused)} lines entered again, 0 mismatches; {len(refused)} refused by the new rules; cases {cases}")
+
+
+# --- Invoice PDF against the Access reference PDFs (design doc §8 step 9) ---
+
+import re  # noqa: E402
+import shutil  # noqa: E402
+import subprocess  # noqa: E402
+
+REFERENCE_DIR = os.environ.get("WINE_REFERENCE_DIR") or (str(Path(CSV_DIR).parent / "reference_invoices") if CSV_DIR else "")
+# file -> (invoice, hide_subtotals). The hidesubtotals variant was made from invoice 83 with the flag set
+# (WineDB_work/scripts/Render-Invoices.ps1); the test sets the same flag on the document.
+REFERENCES = {"F00062_zerovat_multipage.pdf": (62, False), "F00066_negative_qty.pdf": (66, False),
+              "F00083_rabat.pdf": (83, False), "F00083_hidesubtotals.pdf": (83, True), "F00116_plain.pdf": (116, False)}
+
+
+def pdf_text(path) -> str:
+    """The text of a PDF, with all white space as one space. Positions are not compared."""
+    out = subprocess.run(["pdftotext", "-enc", "UTF-8", str(path), "-"], capture_output=True, check=True).stdout
+    return out.decode("utf-8")
+
+
+def flat(text: str) -> str:
+    return " ".join(text.split())
+
+
+@pytest.fixture(scope="module")
+def printed(tmp_path_factory):
+    folder = tmp_path_factory.mktemp("print")
+    load(CSV_DIR, folder / "real.db", folder / "settings.json")
+    from winedb.settings import load_settings
+    c = connect(folder / "real.db")
+    yield c, load_settings(folder / "settings.json"), folder
+    c.close()
+
+
+@pytest.mark.skipif(not shutil.which("pdftotext"), reason="pdftotext (poppler) is needed to read the PDFs")
+@pytest.mark.parametrize("file_name", sorted(REFERENCES))
+def test_invoice_pdf_shows_what_the_access_pdf_shows(file_name, printed):
+    from winedb.invoice_print import PRINT_LABELS, invoice_document, padded, short_date, write_pdf
+    reference = Path(REFERENCE_DIR) / file_name
+    if not reference.exists():
+        pytest.skip(f"no reference PDF {reference}")
+    c, settings, folder = printed
+    invoice_id, hide = REFERENCES[file_name]
+    doc = {**invoice_document(c, invoice_id, settings), "hide_subtotals": hide}
+    new = write_pdf(doc, folder / file_name)
+    old_text, new_text = pdf_text(reference), pdf_text(new)
+    old, ours = flat(old_text), flat(new_text)
+
+    amounts = re.compile(r"kr\. -?[\d.]+,\d\d")
+    assert sorted(amounts.findall(ours)) == sorted(amounts.findall(old))                 # every amount, same count
+    assert old_text.count("\f") == new_text.count("\f")                                  # same number of pages
+    quantity = re.compile(r"(-?\d+) stk i alt")
+    assert quantity.findall(ours) == quantity.findall(old) == [str(doc["total_quantity"])]
+    for text in {flat(line["text"]) for g in doc["groups"] for line in g["lines"]}:      # the wine lines
+        assert ours.count(text) == old.count(text) > 0, text
+    for label in PRINT_LABELS.values():                                                  # shown and hidden alike
+        if label != PRINT_LABELS["title"]:
+            assert (label in ours) == (label in old), label
+    for text in (padded(invoice_id, 5), padded(doc["customer_id"], 4), short_date(doc["invoice_date"]), *doc["texts"]):
+        assert flat(text) in ours and flat(text) in old, text

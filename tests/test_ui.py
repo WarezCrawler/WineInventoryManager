@@ -11,7 +11,7 @@ from nicegui.testing import User
 
 from winedb.db import connect
 
-PAGE_MODULES = ("winedb.ui.menu", "winedb.ui.stock_change", "winedb.ui.stock_mass", "winedb.ui.invoice_header", "winedb.ui.invoice_lines", "winedb.ui.app")
+PAGE_MODULES = ("winedb.ui.menu", "winedb.ui.stock_change", "winedb.ui.stock_mass", "winedb.ui.invoice_header", "winedb.ui.invoice_lines", "winedb.ui.invoice_preview", "winedb.ui.app")
 
 
 @pytest.fixture
@@ -458,3 +458,105 @@ async def test_close_invoice_from_the_lines_screen(screen: User, db):
     screen.find(marker="confirm-close").click()
     await screen.should_see("This invoice is closed. Its lines are read-only.")
     assert header_row(db, 1)["is_closed"] == 1
+
+
+# --- Invoice preview and PDF (step 9) ---
+
+import json  # noqa: E402
+import sys  # noqa: E402
+from datetime import date  # noqa: E402
+
+from winedb.invoices import cancel_line, save_line  # noqa: E402
+
+
+@pytest.fixture
+def pdf_folder(tmp_path, monkeypatch):
+    folder = tmp_path / "pdf"
+    folder.mkdir()
+    settings = tmp_path / "settings.json"
+    settings.write_text(json.dumps({"invoice_address": "Firm address", "invoice_bank_details": "Bank details",
+                                    "invoice_payment_terms": "8 days", "invoice_pdf_folder": str(folder)}), encoding="utf-8")
+    monkeypatch.setenv("WINE_SETTINGS_PATH", str(settings))
+    return folder
+
+
+@pytest.fixture
+def opened(screen: User, monkeypatch) -> list:
+    """The PDFs the screen opens in the viewer (not opened for real in a test)."""
+    files = []
+    monkeypatch.setattr(sys.modules["winedb.ui.invoice_preview"], "open_file", files.append)
+    return files
+
+
+async def test_menu_generate_invoice_opens_the_preview_of_the_selected_invoice(screen: User):
+    await screen.open("/")
+    assert not element(screen, ui.button, "Generate invoice").enabled
+    table = screen.find(ui.table).elements.pop()
+    row = next(r for r in table.rows if r["invoice_id"] == 1)
+    screen.find(ui.table).trigger("selection", {"rows": [row], "keys": [1], "added": True})
+    screen.find(kind=ui.button, content="Generate invoice").click()
+    await screen.should_see("Invoice 1 – preview")
+
+
+async def test_preview_shows_the_lines_totals_and_texts(screen: User, pdf_folder):
+    await screen.open("/invoice/1/preview")
+    await screen.should_see("Invoice no. 00001")
+    await screen.should_see("Æble Ørsted")                       # data as it is
+    await screen.should_see("Århus 8000")
+    grid = screen.find(ui.table).elements.pop()
+    assert [(r["quantity"], r["wine"], r["vintage"], r["sales_price"], r["line_total"]) for r in grid.rows] == [
+        ("2", "Rosso - Rød", "2010", "100.00", "200.00")]
+    for text in ("Total quantity: 2", "Total incl. VAT", "200.00", "Of which VAT", "40.00", "160.00", "Firm address", "8 days"):
+        await screen.should_see(text)
+
+
+async def test_preview_with_hide_subtotals_leaves_out_prices_and_cancelled_lines(screen: User, db, pdf_folder):
+    conn = connect(db)
+    try:
+        new = save_line(conn, 1, {"item_id": 11, "warehouse_id": 1, "quantity": 1, "sales_price": 50, "vat_rate": 0.25})
+        old = conn.execute("SELECT MIN(sales_line_id) FROM invoice_lines WHERE invoice_id = 1").fetchone()[0]
+        cancel_line(conn, 1, old)
+        conn.execute("UPDATE invoice_header SET hide_subtotals = 1 WHERE invoice_id = 1")
+        conn.commit()
+    finally:
+        conn.close()
+    await screen.open("/invoice/1/preview")
+    await screen.should_see("Hide subtotals is on")
+    grid = screen.find(ui.table).elements.pop()
+    assert [c["name"] for c in grid.columns] == ["producer", "quantity", "wine", "vintage"]
+    assert [r["key"] for r in grid.rows] == [new]                 # the cancelled line is not shown
+    await screen.should_see("Total quantity: 1")
+
+
+async def test_create_pdf_saves_and_opens_it_and_asks_before_replacing(screen: User, pdf_folder, opened):
+    await screen.open("/invoice/1/preview")
+    screen.find("Create PDF").click()
+    await screen.should_see("The PDF is saved")
+    pdf = pdf_folder / f"F1_ÆØ7_{date.today():%d-%m-%Y}.pdf"        # Access name; no invoice date, so today
+    assert pdf.read_bytes().startswith(b"%PDF") and opened == [pdf]
+
+    pdf.write_bytes(b"old")
+    screen.find("Create PDF").click()
+    await screen.should_see("already exists")
+    screen.find(marker="keep-pdf").click()
+    await screen.should_see("The PDF is not replaced.")
+    assert pdf.read_bytes() == b"old" and len(opened) == 1
+
+    screen.find("Create PDF").click()
+    await screen.should_see("already exists")
+    screen.find(marker="confirm-replace").click()
+    await screen.should_see("The PDF is saved")
+    assert pdf.read_bytes().startswith(b"%PDF") and len(opened) == 2
+
+
+async def test_create_pdf_without_a_pdf_folder_says_what_to_do(screen: User, tmp_path, monkeypatch, opened):
+    monkeypatch.setenv("WINE_SETTINGS_PATH", str(tmp_path / "missing.json"))
+    await screen.open("/invoice/1/preview")
+    screen.find("Create PDF").click()
+    await screen.should_see("No PDF folder is set.")
+    assert opened == []
+
+
+async def test_preview_of_an_unknown_invoice(screen: User, pdf_folder):
+    await screen.open("/invoice/99/preview")
+    await screen.should_see("Invoice 99 does not exist.")
