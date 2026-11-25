@@ -29,7 +29,7 @@ This page shows the plan on one page: what each version contains, in which order
 | 8 | Invoice lines screen | Done |
 | 9 | Invoice preview and PDF (replaces the Access report `rFaktura`) | Done |
 | 10 | Master data screens (wines with prices, customers, warehouses) and reopen invoice | Done |
-| 11 | End-to-end test and parallel run with Access | Not started |
+| 11 | End-to-end test and parallel run with Access | Tools done: end-to-end test and parallel run check. **Open: your parallel run** ([Parallel_Run.md](Parallel_Run.md)) |
 | Release | Import the **live** Access file (the test data ends in January 2015), repeat the checks, rehearse on a copy ([Branching_Strategy.md §6](Branching_Strategy.md)) | Not started |
 
 ### Differences from Access in version 1

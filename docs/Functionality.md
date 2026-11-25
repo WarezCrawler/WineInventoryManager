@@ -62,6 +62,7 @@ Status: **Done** = built, **v1** = planned for the first release, **Later** = ba
 - 9.2 One-time load of the Access CSV export, loaded as-is: **Done** (`python -m migrate.load_csv`)
 - 9.3 Check of the import against the source: every cell, row counts and column totals (amounts, costs, quantities); PASS or FAIL, nothing else; summary mode without row-level data: **Done**
 - 9.4 "Import from Access database" button: pick the `.accdb`, read it directly, audit, then fill the empty database; shows the audit report: **Done**
+- 9.5 Parallel run check: compare what Access and the program stored for the same scenario, field by field (`python -m migrate.parallel_run`, [Parallel_Run.md](Parallel_Run.md)): **Done**
 
 ## 10. Program
 - 10.1 Table browser: lists the tables and shows their rows: **Done**

@@ -167,7 +167,8 @@ def _save(conn: sqlite3.Connection, table: str, key: str, spec: dict, values: di
     if fields:
         raise ValidationError(list(fields.values()), fields)
     if stored is None:
-        columns = {**clean, **(fixed or {})}
+        # An empty field is left out, so the column gets its default, as in Access (for example postal code 0).
+        columns = {**{k: v for k, v in clean.items() if v is not None}, **(fixed or {})}
         with transaction(conn):
             cursor = conn.execute(f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({', '.join('?' * len(columns))})",
                                   tuple(columns.values()))

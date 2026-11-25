@@ -131,6 +131,14 @@ def test_add_edit_and_hide_a_customer(conn):
     assert get_customer_record(conn, number)["is_hidden"] == 0
 
 
+def test_a_new_row_gets_the_access_defaults_for_empty_fields(conn):
+    number = save_customer(conn, {"customer_name": "No address", "postal_code": None, "city": ""})
+    c = get_customer_record(conn, number)
+    assert (c["postal_code"], c["city"], c["is_hidden"], c["on_mailing_list"]) == (0, None, 0, 0)   # Access: Post_nr 0
+    save_customer(conn, {**c, "postal_code": ""}, number)              # an edit that empties it stores NULL
+    assert get_customer_record(conn, number)["postal_code"] is None
+
+
 def test_add_and_edit_a_warehouse(conn):
     new = save_warehouse(conn, {"warehouse_name": "Cellar", "comment": ""})
     save_warehouse(conn, {"warehouse_name": "Cellar 2", "comment": "Under the house"}, new)
