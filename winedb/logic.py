@@ -30,3 +30,14 @@ def line_amounts(sales_price, quantity, discount, vat_rate, cost_price) -> LineA
     amount_ex_vat = round(amount_incl_vat / (1 + _number(vat_rate)), 2)
     amount_cost = round(_number(cost_price) * qty, 2)
     return LineAmounts(amount_incl_vat, amount_ex_vat, amount_cost)
+
+
+def default_cost(cost_rows: list[dict]) -> float:
+    """The default cost price of a new invoice line (design doc §5.2, Access `GetCostPrisStandard`).
+
+    `cost_rows` are the wine's rows of `prices_cost`. The default is the `cost_price` of the first row with
+    `price_type = 'Standard'` (upper and lower case the same, as in Access), where "first" means the lowest
+    `cost_price_id` (decision 4); 0 if there is none."""
+    standard = sorted((r for r in cost_rows if (r.get("price_type") or "").casefold() == "standard"),
+                      key=lambda r: r["cost_price_id"])
+    return _number(standard[0]["cost_price"]) if standard else 0.0

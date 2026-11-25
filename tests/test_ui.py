@@ -11,7 +11,7 @@ from nicegui.testing import User
 
 from winedb.db import connect
 
-PAGE_MODULES = ("winedb.ui.menu", "winedb.ui.stock_change", "winedb.ui.stock_mass", "winedb.ui.invoice_header", "winedb.ui.app")
+PAGE_MODULES = ("winedb.ui.menu", "winedb.ui.stock_change", "winedb.ui.stock_mass", "winedb.ui.invoice_header", "winedb.ui.invoice_lines", "winedb.ui.app")
 
 
 @pytest.fixture
@@ -31,7 +31,10 @@ def db(tmp_path, monkeypatch):
         INSERT INTO warehouses (warehouse_id, warehouse_name) VALUES (1, 'Main'), (2, 'Fridge');
         INSERT INTO stock_transactions (item_id, warehouse_id, quantity, comment, created_at)
             VALUES (10, 1, 12, 'Opening', '2013-06-21 00:00:05');
-        INSERT INTO invoice_lines (item_id, warehouse_id, invoice_id, quantity) VALUES (10, 1, 1, 2);
+        INSERT INTO invoice_lines (item_id, warehouse_id, invoice_id, quantity, sales_price, vat_rate, amount_incl_vat, amount_ex_vat)
+            VALUES (10, 1, 1, 2, 100, 0.25, 200, 160);
+        INSERT INTO prices_sales (sales_price_id, item_id, price_type, sales_price, vat_rate) VALUES (1, 10, 'Alm', 165, 0.25), (2, 10, '0P', 120, 0);
+        INSERT INTO prices_cost (cost_price_id, item_id, price_type, cost_price) VALUES (1, 10, 'Standard', 80);
     """)
     conn.close()
     return path
@@ -350,3 +353,108 @@ async def test_closed_invoice_is_read_only(screen: User):
 async def test_unknown_invoice(screen: User):
     await screen.open("/invoice/999")
     await screen.should_see("Invoice 999 does not exist.")
+
+
+# --- Invoice lines screen (step 8) ---
+
+def line_rows(db, invoice_id):
+    conn = connect(db)
+    try:
+        return [dict(r) for r in conn.execute("SELECT * FROM invoice_lines WHERE invoice_id = ? ORDER BY sales_line_id", (invoice_id,))]
+    finally:
+        conn.close()
+
+
+def select_line(user: User, line_id: int):
+    """What the browser sends when the user clicks a row of the lines grid."""
+    grid = user.find(ui.table).elements.pop()
+    row = next(r for r in grid.rows if r["sales_line_id"] == line_id)
+    user.find(ui.table).trigger("selection", {"rows": [row], "keys": [line_id], "added": True})
+
+
+async def test_menu_open_invoice_opens_the_lines_of_the_selected_invoice(screen: User):
+    await screen.open("/")
+    table = screen.find(ui.table).elements.pop()
+    row = next(r for r in table.rows if r["invoice_id"] == 1)
+    screen.find(ui.table).trigger("selection", {"rows": [row], "keys": [1], "added": True})   # the user clicks the row
+    assert element(screen, ui.button, "Open invoice").enabled                  # enabled by the selection
+    screen.find(kind=ui.button, content="Open invoice").click()             # not the heading "Open invoices"
+    await screen.should_see("Invoice 1 – lines")
+
+
+async def test_new_line_with_picked_price_and_default_cost_is_saved(screen: User, db):
+    await screen.open("/invoice/1/lines")
+    await screen.should_see("Invoice total excl. VAT: 160.00")
+    element(screen, ui.select, "Wine").value = 10
+    assert element(screen, ui.number, "Unit cost price").value == 80          # Access: the Standard cost
+    element(screen, ui.select, "Pick a sales price").value = 1                # Alm 165, 25 % VAT
+    assert element(screen, ui.number, "Unit price").value == 165 and element(screen, ui.number, "VAT %").value == 25
+    element(screen, ui.select, "Warehouse").value = 1                         # the invoice has no warehouse
+    await screen.should_see("On-hand stock in this warehouse: 10")
+    element(screen, ui.number, "Quantity").value = 3
+    element(screen, ui.number, "Discount").value = 15
+    await screen.should_see("Line total incl. VAT: 480.00 · excl. VAT: 384.00 · cost: 240.00")
+    screen.find("Save line").click()
+    await screen.should_see("is saved.")
+    new = line_rows(db, 1)[-1]
+    assert (new["item_id"], new["warehouse_id"], new["quantity"], new["sales_price"], new["price_type"], new["vat_rate"],
+            new["discount"], new["cost_price"]) == (10, 1, 3, 165, "Alm", 0.25, 15, 80)
+    assert (new["amount_incl_vat"], new["amount_ex_vat"], new["amount_cost"], new["is_deleted"]) == (480, 384, 240, 0)
+    await screen.should_see("Invoice total excl. VAT: 544.00")
+
+
+async def test_typed_price_clears_the_price_type(screen: User, db):
+    await screen.open("/invoice/1/lines")
+    element(screen, ui.select, "Wine").value = 10
+    element(screen, ui.select, "Pick a sales price").value = 1
+    element(screen, ui.number, "Unit price").value = 170                      # typed by hand
+    await screen.should_see("Price typed by hand")
+    element(screen, ui.select, "Warehouse").value = 1
+    element(screen, ui.number, "Quantity").value = 1
+    screen.find("Save line").click()
+    await screen.should_see("is saved.")
+    assert (line_rows(db, 1)[-1]["price_type"], line_rows(db, 1)[-1]["vat_rate"]) == (None, 0.25)
+
+
+async def test_line_problems_are_shown_and_nothing_is_saved(screen: User, db):
+    before = line_rows(db, 1)
+    await screen.open("/invoice/1/lines")
+    screen.find("Save line").click()
+    await screen.should_see("Choose a wine.")
+    assert line_rows(db, 1) == before
+
+
+async def test_cancel_line_asks_first_then_zero_and_flag(screen: User, db):
+    await screen.open("/invoice/1/lines")
+    line_id = line_rows(db, 1)[0]["sales_line_id"]
+    select_line(screen, line_id)
+    await screen.should_see(f"Line {line_id}")
+    screen.find("Cancel line").click()
+    await screen.should_see("Its quantity and amounts become 0")
+    screen.find(marker="keep-line").click()
+    assert line_rows(db, 1)[0]["is_deleted"] == 0
+    screen.find("Cancel line").click()
+    await screen.should_see("Its quantity and amounts become 0")
+    screen.find(marker="confirm-cancel").click()
+    await screen.should_see(f"Line {line_id} is cancelled.")
+    row = line_rows(db, 1)[0]
+    assert (row["is_deleted"], row["quantity"], row["amount_incl_vat"]) == (1, 0, 0)
+    grid = screen.find(ui.table).elements.pop()
+    assert grid.rows[0]["line_status"] == "Cancelled"
+    await screen.should_see("Invoice total excl. VAT: 0.00")
+
+
+async def test_closed_invoice_lines_are_read_only(screen: User):
+    await screen.open("/invoice/2/lines")
+    await screen.should_see("This invoice is closed. Its lines are read-only.")
+    assert not element(screen, ui.button, "Save line").enabled
+    assert not element(screen, ui.select, "Wine").enabled
+
+
+async def test_close_invoice_from_the_lines_screen(screen: User, db):
+    await screen.open("/invoice/1/lines")
+    screen.find("Close invoice").click()
+    await screen.should_see("Close invoice 1?")
+    screen.find(marker="confirm-close").click()
+    await screen.should_see("This invoice is closed. Its lines are read-only.")
+    assert header_row(db, 1)["is_closed"] == 1

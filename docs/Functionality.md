@@ -8,7 +8,7 @@ Status: **Done** = built, **v1** = planned for the first release, **Later** = ba
 
 ## 1. Main menu (§6.1)
 - 1.1 List of open invoices (newest first) with invoice no., customer no. and customer name; invoices without a customer show "(no customer)", and soft-deleted invoices are marked: **Done**
-- 1.2 Open invoice lines for the selected invoice: **v1**
+- 1.2 Open invoice lines for the selected invoice: **Done**
 - 1.3 Open invoice header for the selected invoice, or create a new one: **Done**
 - 1.4 Open stock adjustment: **v1**
 - 1.5 Open customer list: **Later**
@@ -24,7 +24,8 @@ Status: **Done** = built, **v1** = planned for the first release, **Later** = ba
 
 ## 3. Manage open invoices
 - 3.1 Create an invoice and edit its header: **Done** (§6.3)
-- 3.2 Add and edit invoice lines with live price, VAT and discount calculation: **v1** (§5.1, §6.4)
+- 3.2 Add and edit invoice lines with live price, VAT and discount calculation: **Done** (§5.1, §6.4)
+- 3.2a Cancel a wrong invoice line: quantity and amounts 0, a status flag, never printed (decision 16): **Done**
 - 3.3 Close an invoice (it becomes read-only): **Done**
 - 3.4 Soft delete an invoice (flagged, never removed): **Done**
 

@@ -134,3 +134,118 @@ def test_date_text():
 
 def test_customer_picker_lists_customers_that_are_not_hidden_by_name(conn):
     assert [c["customer_name"] for c in list_customers(conn)] == ["aage", "Bent", "Æble Ørsted"]
+
+
+# --- Invoice lines (step 8) ---
+
+from winedb.invoices import cancel_line, cost_prices, lines, sales_prices, save_line, totals  # noqa: E402
+from winedb.logic import default_cost  # noqa: E402
+from winedb.stock import on_hand  # noqa: E402
+
+
+@pytest.fixture
+def sale(conn):
+    conn.executescript("""
+        INSERT INTO items (item_id, item_code, name, vintage) VALUES (100, 'SAbSe_RA09', 'Seleccion', 2009), (101, 'X', 'Other', 2010);
+        INSERT INTO prices_sales (sales_price_id, item_id, price_type, sales_price, vat_rate) VALUES
+            (1, 100, 'Alm', 165, 0.25), (2, 100, 'Tilbud', 150, 0.25), (3, 101, '0P', 99.5, 0);
+        INSERT INTO prices_cost (cost_price_id, item_id, price_type, cost_price) VALUES
+            (5, 100, 'rå', 70), (7, 100, 'standard', 82.5), (6, 100, 'Standard', 80);
+        INSERT INTO stock_transactions (item_id, warehouse_id, quantity) VALUES (100, 1, 24);
+    """)
+    number = create_header(conn, 7, warehouse_id=1)
+    return conn, number
+
+
+def line(**fields):
+    base = {"item_id": 100, "warehouse_id": 1, "quantity": 2, "sales_price": 165, "price_type": "Alm",
+            "vat_rate": 0.25, "discount": 0, "cost_price": 80}
+    return {**base, **fields}
+
+
+def test_default_cost_is_the_first_standard_row():
+    assert default_cost([{"cost_price_id": 5, "price_type": "rå", "cost_price": 70},
+                         {"cost_price_id": 7, "price_type": "standard", "cost_price": 82.5},
+                         {"cost_price_id": 6, "price_type": "Standard", "cost_price": 80}]) == 80
+    assert default_cost([{"cost_price_id": 5, "price_type": "rå", "cost_price": 70}]) == 0
+    assert default_cost([]) == 0
+
+
+def test_price_lists_of_a_wine(sale):
+    conn, _ = sale
+    assert [p["price_type"] for p in sales_prices(conn, 100)] == ["Alm", "Tilbud"]
+    assert default_cost(cost_prices(conn, 100)) == 80
+
+
+def test_new_line_is_stored_with_calculated_amounts(sale):
+    conn, number = sale
+    line_id = save_line(conn, number, line(quantity=3, discount=15, comment=" gift "))
+    row = dict(conn.execute("SELECT * FROM invoice_lines WHERE sales_line_id = ?", (line_id,)).fetchone())
+    assert (row["amount_incl_vat"], row["amount_ex_vat"], row["amount_cost"]) == (480.0, 384.0, 240.0)
+    assert (row["invoice_id"], row["item_id"], row["warehouse_id"], row["quantity"]) == (number, 100, 1, 3)
+    assert (row["price_type"], row["comment"], row["is_deleted"]) == ("Alm", "gift", 0)
+    assert row["created_at"] and on_hand(conn, 100, 1) == 21
+
+
+def test_hand_typed_price_has_no_price_type_and_keeps_the_vat_rate(sale):
+    conn, number = sale
+    line_id = save_line(conn, number, line(sales_price=170, price_type=""))
+    assert tuple(conn.execute("SELECT price_type, vat_rate, amount_incl_vat FROM invoice_lines WHERE sales_line_id = ?",
+                              (line_id,)).fetchone()) == (None, 0.25, 340.0)
+
+
+def test_changed_line_recalculates_its_amounts(sale):
+    conn, number = sale
+    line_id = save_line(conn, number, line())
+    save_line(conn, number, line(quantity=-1, vat_rate=0), line_id)
+    assert tuple(conn.execute("SELECT quantity, amount_incl_vat, amount_ex_vat FROM invoice_lines WHERE sales_line_id = ?",
+                              (line_id,)).fetchone()) == (-1, -165.0, -165.0)
+    assert len(lines(conn, number)) == 1
+
+
+def test_cancelled_line_stays_with_zero_and_flag_and_leaves_stock_and_totals(sale):
+    conn, number = sale
+    keep = save_line(conn, number, line(quantity=1))
+    wrong = save_line(conn, number, line(quantity=6, comment="typo"))
+    assert on_hand(conn, 100, 1) == 17 and totals(conn, number)["amount_incl_vat"] == 1155.0
+    cancel_line(conn, number, wrong)
+    rows = {r["sales_line_id"]: r for r in lines(conn, number)}
+    assert rows[wrong]["is_deleted"] == 1 and rows[wrong]["quantity"] == 0 and rows[wrong]["amount_incl_vat"] == 0
+    assert rows[wrong]["comment"].startswith("Cancelled ") and "quantity was 6. typo" in rows[wrong]["comment"]
+    assert rows[keep]["is_deleted"] == 0
+    assert on_hand(conn, 100, 1) == 23 and totals(conn, number) == {"amount_ex_vat": 132.0, "amount_incl_vat": 165.0, "amount_cost": 80.0}
+    with pytest.raises(ValidationError, match="cancelled"):
+        save_line(conn, number, line(), wrong)
+    with pytest.raises(ValidationError, match="cancelled"):
+        cancel_line(conn, number, wrong)
+
+
+def test_line_rules(sale):
+    conn, number = sale
+    count = conn.execute("SELECT COUNT(*) FROM invoice_lines").fetchone()[0]
+    with pytest.raises(ValidationError) as e:
+        save_line(conn, number, line(item_id=999, warehouse_id=None, quantity=1.5, sales_price="x", vat_rate=1))
+    assert len(e.value.problems) == 5
+    with pytest.raises(ValidationError, match="other than 0"):
+        save_line(conn, number, line(quantity=0))
+    assert conn.execute("SELECT COUNT(*) FROM invoice_lines").fetchone()[0] == count
+
+
+def test_lines_of_a_closed_invoice_cannot_be_changed(sale):
+    conn, number = sale
+    line_id = save_line(conn, number, line())
+    close(conn, number)
+    with pytest.raises(InvoiceClosedError):
+        save_line(conn, number, line(quantity=5), line_id)
+    with pytest.raises(InvoiceClosedError):
+        save_line(conn, number, line())
+    with pytest.raises(InvoiceClosedError):
+        cancel_line(conn, number, line_id)
+
+
+def test_a_line_of_another_invoice_is_refused(sale):
+    conn, number = sale
+    other = create_header(conn, 7, warehouse_id=1)
+    line_id = save_line(conn, other, line())
+    with pytest.raises(ValidationError, match="not a line of invoice"):
+        save_line(conn, number, line(), line_id)

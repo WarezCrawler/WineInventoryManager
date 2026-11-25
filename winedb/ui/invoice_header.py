@@ -175,6 +175,6 @@ def _invoice_page(invoice_id: int | None) -> None:
     deleted.on_value_change(on_deleted_change)
     save.on_click(on_save)
     close_button.on_click(on_close)
-    lines.on_click(lambda: ui.notify("The invoice lines are not built yet (design doc §8 step 8)."))
+    lines.on_click(lambda: ui.navigate.to(f"/invoice/{invoice_id}/lines"))
     show_customer()
 

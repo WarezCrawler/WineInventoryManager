@@ -7,14 +7,14 @@ from winedb.validation import ValidationError, is_timestamp, now_text
 
 
 # The on-hand formula (design doc §5.3), in one place: stock movements count with their sign, invoice
-# lines count negative. Lines of soft-deleted invoices are left out.
+# lines count negative. Lines of soft-deleted invoices and cancelled lines (quantity 0) are left out.
 _ON_HAND = """
     SELECT item_id, warehouse_id, SUM(quantity) AS on_hand FROM (
         SELECT item_id, warehouse_id, COALESCE(quantity, 0) AS quantity FROM stock_transactions
         UNION ALL
         SELECT l.item_id, l.warehouse_id, -COALESCE(l.quantity, 0) FROM invoice_lines AS l
             LEFT JOIN invoice_header AS h ON h.invoice_id = l.invoice_id
-            WHERE COALESCE(h.is_deleted, 0) = 0
+            WHERE COALESCE(h.is_deleted, 0) = 0 AND COALESCE(l.is_deleted, 0) = 0
     ) {where} GROUP BY item_id, warehouse_id"""
 
 

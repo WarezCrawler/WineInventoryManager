@@ -26,10 +26,6 @@ def _rows() -> list[dict]:
             for r in invoices]
 
 
-def _not_built(screen: str, step: int) -> None:
-    ui.notify(f"{screen} is not built yet (design doc §8 step {step}).")
-
-
 @ui.page("/")
 def menu_page():
     with ui.header().classes("items-center"):
@@ -53,7 +49,7 @@ def menu_page():
                 return table.selected[0] if table.selected else None
 
             def open_lines() -> None:
-                _not_built(f"The invoice lines of invoice {selected()['invoice_id']}", 8)
+                ui.navigate.to(f"/invoice/{selected()['invoice_id']}/lines")
 
             def open_header() -> None:
                 inv = selected()
@@ -64,7 +60,8 @@ def menu_page():
                 "The details of the selected invoice. With no invoice selected: a new invoice.")
             ui.button("Stock change", on_click=lambda: ui.navigate.to("/stock-change")).props("no-caps").classes("w-full")
             ui.button("Mass stock registration", on_click=lambda: ui.navigate.to("/stock-mass")).props("no-caps").classes("w-full")
-            lines_button.bind_enabled_from(table, "selected", backward=bool)
+            lines_button.disable()
+            table.on_select(lambda e: lines_button.set_enabled(bool(e.selection)))
 
             ui.separator()
             for caption in LATER_BUTTONS:
