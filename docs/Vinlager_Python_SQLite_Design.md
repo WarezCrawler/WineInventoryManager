@@ -232,8 +232,8 @@ The title is "Wine Inventory Manager". On the left is the list of **open invoice
 
 | Button | Access caption | In v1 |
 |---|---|---|
-| Open invoice (opens the invoice lines of the selected invoice) | Åben Faktura | **yes** |
-| Invoice details (opens the header of the selected invoice; if no invoice is selected, a new one) | Åben faktura egenskaber | **yes** |
+| Open invoice lines (opens the invoice lines of the selected invoice) | Åben Faktura | **yes** |
+| Invoice (opens the header of the selected invoice; if no invoice is selected, a new one) | Åben faktura egenskaber | **yes** |
 | Stock change (new entry) | Open Vinlager tilgange/afgange | **yes** |
 | Mass stock registration (§6.2.1) | Import vinlager tilgange/afgange | **yes** |
 | Generate invoice (preview and PDF, step 9) | Generer Faktura | **yes** (done in step 9; it opens the preview of the selected invoice) |
@@ -274,7 +274,7 @@ The new screen does the same, with the same table and fields. It is an editable 
 The data functions are `mass_entry.paste_into()`, `mass_entry.check_rows()` and `stock.add_movements()`.
 
 ### 6.3 Invoice header screen
-The screen is at `/invoice/new` and `/invoice/<number>`; the main menu button "Invoice details" opens the selected invoice, or a new one. The fields are those in §5.4:
+The screen is at `/invoice/new` and `/invoice/<number>`; the main menu button "Invoice" opens the selected invoice, or a new one. The fields are those in §5.4:
 - **Customer:** a picker with the customers that are not hidden, sorted by name; typing searches the name (Access: the combo box and the "contains" search). The customer's address, postal code, city and phone are shown read-only. A new invoice must have a customer; the Access default of customer `0` is not offered. An old draft with customer 0 shows "(no customer)" and can still be changed in other fields.
 - **Default warehouse** (optional, as in Access), **invoice date** (a calendar; today for a new invoice, decision 3; stored as `YYYY-MM-DD 00:00:00` like Access), **comment**, **hide subtotals**.
 - **Delete:** the soft-delete flag. Setting it shows the Access warning in English: "Be aware that this invoice will be suppressed, and must have zero quantity and amounts!"
@@ -282,7 +282,7 @@ The screen is at `/invoice/new` and `/invoice/<number>`; the main menu button "I
 Buttons: **Save** (saves only the changed fields), **Close invoice** (asks first, saves open changes, then sets `is_closed = 1` and nothing else, decision 8), **Open lines** (step 8), **Back**. A closed invoice opens read-only. The data functions are `invoices.create_header()`, `update_header()`, `set_deleted()` and `close()`; only `set_deleted()` and `close()` change the status of an invoice.
 
 ### 6.4 Invoice lines screen
-The screen is at `/invoice/<number>/lines`. The main menu button "Open invoice" and the button "Open lines" on the invoice header screen open it. As the Access split form, it has a grid of the lines and, below it, an entry panel for one line:
+The screen is at `/invoice/<number>/lines`. The main menu button "Open invoice lines" and the button "Open lines" on the invoice header screen open it. As the Access split form, it has a grid of the lines and, below it, an entry panel for one line:
 - **Top:** invoice number, customer and invoice date. A closed invoice shows its lines read-only.
 - **Grid:** the lines of the invoice in the order they were entered, with line number, wine, warehouse, quantity, unit price, discount, price type, VAT, the amounts without and with VAT, and the status ("Cancelled"). Click a line to edit it.
 - **Below the grid:** the invoice totals without VAT and with VAT. Cancelled lines are left out.

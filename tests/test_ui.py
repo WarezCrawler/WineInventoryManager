@@ -78,7 +78,7 @@ async def test_menu_lists_open_invoices_in_english(screen: User):
 
 async def test_menu_open_invoice_needs_a_selection_and_later_buttons_are_disabled(screen: User):
     await screen.open("/")
-    assert not element(screen, ui.button, "Open invoice").enabled
+    assert not element(screen, ui.button, "Open invoice lines").enabled
     assert element(screen, ui.button, "Wine list").props.get("disable") is True
 
 
@@ -281,7 +281,7 @@ def header_row(db, invoice_id):
 
 async def test_menu_invoice_details_without_selection_opens_a_new_invoice(screen: User):
     await screen.open("/")
-    screen.find("Invoice details").click()
+    screen.find(marker="invoice").click()                  # the button "Invoice"
     await screen.should_see("New invoice")
 
 
@@ -377,8 +377,8 @@ async def test_menu_open_invoice_opens_the_lines_of_the_selected_invoice(screen:
     table = screen.find(ui.table).elements.pop()
     row = next(r for r in table.rows if r["invoice_id"] == 1)
     screen.find(ui.table).trigger("selection", {"rows": [row], "keys": [1], "added": True})   # the user clicks the row
-    assert element(screen, ui.button, "Open invoice").enabled                  # enabled by the selection
-    screen.find(kind=ui.button, content="Open invoice").click()             # not the heading "Open invoices"
+    assert element(screen, ui.button, "Open invoice lines").enabled            # enabled by the selection
+    screen.find(kind=ui.button, content="Open invoice lines").click()
     await screen.should_see("Invoice 1 – lines")
 
 
@@ -416,12 +416,34 @@ async def test_typed_price_clears_the_price_type(screen: User, db):
     assert (line_rows(db, 1)[-1]["price_type"], line_rows(db, 1)[-1]["vat_rate"]) == (None, 0.25)
 
 
-async def test_line_problems_are_shown_and_nothing_is_saved(screen: User, db):
+async def test_line_problems_are_shown_at_the_fields_and_nothing_is_saved(screen: User, db):
     before = line_rows(db, 1)
     await screen.open("/invoice/1/lines")
+    element(screen, ui.select, "Wine").value = 10
+    element(screen, ui.number, "Quantity").value = 2
     screen.find("Save line").click()
-    await screen.should_see("Choose a wine.")
+    await screen.should_see("Choose a warehouse. Enter the sales price. Enter the VAT rate.")   # the invoice has no warehouse
+    marked = {name: element(screen, kind, name).props.get("error-message")
+              for kind, name in ((ui.select, "Wine"), (ui.select, "Warehouse"), (ui.number, "Quantity"),
+                                 (ui.number, "Unit price"), (ui.number, "VAT %"))}
+    assert marked == {"Wine": None, "Warehouse": "Choose a warehouse.", "Quantity": None,
+                      "Unit price": "Enter the sales price.", "VAT %": "Enter the VAT rate."}
+    element(screen, ui.select, "Warehouse").value = 1                        # a changed field loses its mark
+    assert element(screen, ui.select, "Warehouse").props.get("error") is None
     assert line_rows(db, 1) == before
+
+
+async def test_an_unexpected_error_on_save_is_shown(screen: User, db, monkeypatch, caplog):
+    import sys
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("disk full")
+    monkeypatch.setattr(sys.modules["winedb.ui.invoice_lines"], "save_line", broken)
+    await screen.open("/invoice/1/lines")
+    screen.find("Save line").click()
+    await screen.should_see("Unexpected error: disk full")
+    assert "Saving a line of invoice 1 failed" in caplog.text     # also in the log, with the traceback
+    caplog.clear()                                                # expected: do not fail the test on it
 
 
 async def test_cancel_line_asks_first_then_zero_and_flag(screen: User, db):

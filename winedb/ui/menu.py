@@ -55,8 +55,8 @@ def menu_page():
                 inv = selected()
                 ui.navigate.to(f"/invoice/{inv['invoice_id']}" if inv else "/invoice/new")
 
-            lines_button = ui.button("Open invoice", on_click=open_lines).props("no-caps").classes("w-full")
-            ui.button("Invoice details", on_click=open_header).props("no-caps").classes("w-full").tooltip(
+            lines_button = ui.button("Open invoice lines", on_click=open_lines).props("no-caps").classes("w-full")
+            ui.button("Invoice", on_click=open_header).props("no-caps").classes("w-full").mark("invoice").tooltip(
                 "The details of the selected invoice. With no invoice selected: a new invoice.")
             invoice_button = ui.button("Generate invoice", on_click=lambda: ui.navigate.to(
                 f"/invoice/{selected()['invoice_id']}/preview")).props("no-caps").classes("w-full").tooltip(
