@@ -41,9 +41,18 @@ def _backup(conn: sqlite3.Connection, path: Path) -> Path:
     return target
 
 
-def connect(path: Path | str | None = None, migrations_dir: Path | str = MIGRATIONS_DIR) -> sqlite3.Connection:
+def connect(path: Path | str | None = None, migrations_dir: Path | str = MIGRATIONS_DIR,
+            version: int | None = None) -> sqlite3.Connection:
+    """Open the database and bring it to the newest schema version, or only to `version` if given.
+
+    The Access import uses `version=1`: it loads into the 1:1 schema of `001_init.sql`, and the program
+    upgrades the file the next time it opens it."""
     path = Path(path) if path is not None else db_path()
     migrations = _load_migrations(Path(migrations_dir))
+    if version is not None:
+        if not 1 <= version <= len(migrations):
+            raise ValueError(f"No schema version {version}; the newest is {len(migrations)}")
+        migrations = migrations[:version]
     latest = len(migrations)
 
     path.parent.mkdir(parents=True, exist_ok=True)

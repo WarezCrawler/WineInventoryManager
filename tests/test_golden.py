@@ -77,3 +77,42 @@ def test_open_invoice_list_has_every_open_invoice(conn):
     expected = sorted((int(r["Fakt_ID"]) for r in read_csv("tFaktura") if r["Lukket"] != "True"), reverse=True)
     assert [r["invoice_id"] for r in open_invoices(conn)] == expected
     print(f"\n{len(expected)} open invoices")
+
+
+def test_every_historical_line_entered_again_gives_the_stored_amounts(tmp_path):
+    # Design doc §8 step 8: enter historical lines again through save_line() and get identical values. The
+    # design names three cases (a discount, 0 % VAT, a negative quantity); this test enters every line that
+    # the screen accepts. Lines with quantity 0 or without a real wine or warehouse cannot be entered on the
+    # screen (new rules, validate on write); they are counted, not checked.
+    from winedb.invoices import create_header, save_line
+    path = tmp_path / "again.db"
+    load(CSV_DIR, path)
+    c = connect(path)
+    try:
+        customer = c.execute("SELECT MIN(customer_id) FROM customers").fetchone()[0]
+        number = create_header(c, customer)
+        old = [dict(r) for r in c.execute("SELECT * FROM invoice_lines WHERE invoice_id <> ? ORDER BY sales_line_id", (number,))]
+        mismatches, refused, cases = [], [], {"discount": 0, "zero VAT": 0, "negative quantity": 0}
+        for r in old:
+            fields = {k: r[k] for k in ("item_id", "warehouse_id", "quantity", "sales_price", "price_type", "vat_rate",
+                                        "discount", "cost_price", "comment")}
+            try:
+                new_id = save_line(c, number, fields)
+            except Exception as e:  # noqa: BLE001  (a refused line is counted)
+                refused.append((r["sales_line_id"], str(e)))
+                continue
+            new = c.execute("SELECT amount_incl_vat, amount_ex_vat, amount_cost FROM invoice_lines WHERE sales_line_id = ?",
+                            (new_id,)).fetchone()
+            stored = tuple(0.0 if r[k] is None else r[k] for k in ("amount_incl_vat", "amount_ex_vat", "amount_cost"))
+            if tuple(new) != stored:
+                mismatches.append((r["sales_line_id"], tuple(new), stored))
+            cases["discount"] += bool(r["discount"])
+            cases["zero VAT"] += r["vat_rate"] == 0
+            cases["negative quantity"] += (r["quantity"] or 0) < 0
+    finally:
+        c.close()
+    assert mismatches == []
+    assert all(cases.values()), cases
+    allowed = ("quantity other than 0", "Enter the quantity", "Choose a warehouse", "Choose a wine")
+    assert all(any(reason in why for reason in allowed) for _, why in refused), refused
+    print(f"\n{len(old) - len(refused)} lines entered again, 0 mismatches; {len(refused)} refused by the new rules; cases {cases}")

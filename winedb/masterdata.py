@@ -3,7 +3,7 @@ tables itself."""
 import sqlite3
 
 ITEM_COLUMNS = ("item_id", "item_code", "name", "vintage", "producer", "country", "bottle_size", "item_type",
-                "is_discontinued")
+                "is_discontinued", "is_private")
 
 
 def list_items(conn: sqlite3.Connection) -> list[dict]:

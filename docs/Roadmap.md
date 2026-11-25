@@ -4,7 +4,7 @@ This page shows the plan on one page: what each version contains, in which order
 
 | Version | Goal | Status |
 |---|---|---|
-| **1** | Replace the Access app. Copy its functions and data with minimal change. | In progress: step 8 of 10 |
+| **1** | Replace the Access app. Copy its functions and data with minimal change. | In progress: step 9 of 10 |
 | **1.x** | The Access functions that are not in version 1 (backlog). | Not started |
 | **2** | Modules, a real stock ledger, stock count, orders and deliveries. | Designed, not started |
 | **3** | Accounting, with accounts receivable and banking as optional modules. | Outline only |
@@ -26,7 +26,7 @@ This page shows the plan on one page: what each version contains, in which order
 | 5 | Main menu with the list of open invoices | Done |
 | 6 | Stock change screen (the fields of the Access form) and mass stock registration (the Access "Import vinlager tilgange/afgange" grid) | Done |
 | 7 | Invoice header screen (create, edit, delete flag, close) | Done |
-| 8 | Invoice lines screen | Not started |
+| 8 | Invoice lines screen | Done |
 | 9 | Invoice preview and PDF (replaces the Access report `rFaktura`) | Not started |
 | 10 | End-to-end test and parallel run with Access | Not started |
 | Release | Import the **live** Access file (the test data ends in January 2015), repeat the checks, rehearse on a copy ([Branching_Strategy.md §6](Branching_Strategy.md)) | Not started |
@@ -46,7 +46,10 @@ Version 1 copies Access, but not exactly. Each difference below is either decide
 | 7 | Inputs are checked when saved (for example: the quantity must be a whole number other than 0). Old rows are never checked. | Prevents new bad data | In step 6 |
 | 8 | The stock change picker hides discontinued wines whose total stock is 0, and marks the others "(discontinued)". Access listed all wines. | Fewer wrong picks; stock on a discontinued wine can still be corrected | Done (owner decision) |
 | 9 | Mass stock registration also accepts the wine code, not only the wine id. | Users know the code better | Done (owner decision) |
+| 10 | A wrong invoice line is cancelled (quantity 0, status flag, not printed). Access deleted the line. | Rows are never deleted | Done (owner decision 16) |
 **Rule for version 1 (owner, 2026-11-21): keep data transformations to a minimum.** The data is loaded 1:1 and the schema does not change after `001_init.sql`. The screens store only the fields that the Access forms stored. So these planned additions **moved to version 2**:
+
+**One exception (owner, 2026-11-25):** the flag `invoice_lines.is_deleted` (migration `002`, decision 16). A wrong invoice line is cancelled: quantity 0, the flag set, never printed. It does not change the 1:1 import: the import still loads into schema version 1, and the program upgrades the file.
 
 - **Type of change** on each stock movement (purchase, count, transfer, write-off, sample, other). In version 1 the cause stays in the free-text comment, as in Access.
 - **Recorded at:** the time when the program wrote a stock movement, an invoice or an invoice line.

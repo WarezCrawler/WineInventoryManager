@@ -100,7 +100,7 @@ def load(csv_dir: Path | str, db_file: Path | str, settings_file: Path | str | N
         data[access_table] = rows
     settings = read_settings(csv_dir)
 
-    conn = connect(db_file)
+    conn = connect(db_file, version=SCHEMA_VERSION)  # the 1:1 schema; the program upgrades it later
     try:
         version = conn.execute("PRAGMA user_version").fetchone()[0]
         if version != SCHEMA_VERSION:

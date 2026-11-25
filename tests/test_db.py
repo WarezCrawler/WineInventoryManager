@@ -26,12 +26,42 @@ def test_first_start_creates_the_database(tmp_path):
     assert conn.execute("PRAGMA user_version").fetchone()[0] == latest_version() >= 1
 
 
-def test_schema_columns_match_column_map(tmp_path):
+# Columns outside the 1:1 copy, added by later migrations (design doc §10, decision 16).
+ADDED_COLUMNS = {"invoice_lines": ["is_deleted"]}
+
+
+def columns(conn, table):
+    return [r["name"] for r in conn.execute(f"PRAGMA table_info({table})")]
+
+
+def test_schema_version_1_columns_match_column_map(tmp_path):
+    conn = connect(tmp_path / "wine.db", version=1)
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 1
+    for access_table, mapping in COLUMN_MAP.items():
+        assert columns(conn, TABLE_MAP[access_table]) == list(mapping.values()), access_table
+
+
+def test_newest_schema_adds_only_the_decided_columns(tmp_path):
     conn = connect(tmp_path / "wine.db")
     for access_table, mapping in COLUMN_MAP.items():
         table = TABLE_MAP[access_table]
-        cols = [r["name"] for r in conn.execute(f"PRAGMA table_info({table})")]
-        assert cols == list(mapping.values()), table
+        assert columns(conn, table) == list(mapping.values()) + ADDED_COLUMNS.get(table, []), table
+
+
+def test_a_database_stopped_at_version_1_is_upgraded_later_with_a_backup(tmp_path):
+    db = tmp_path / "wine.db"
+    conn = connect(db, version=1)
+    conn.execute("INSERT INTO invoice_lines (item_id, invoice_id, warehouse_id, quantity) VALUES (1, 1, 1, 6)")
+    conn.close()
+    conn = connect(db)
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == latest_version()
+    assert tuple(conn.execute("SELECT quantity, is_deleted FROM invoice_lines").fetchone()) == (6, 0)   # old lines: not cancelled
+    assert list(tmp_path.glob("wine.db.bak-*"))
+
+
+def test_an_unknown_version_is_refused(tmp_path):
+    with pytest.raises(ValueError):
+        connect(tmp_path / "wine.db", version=latest_version() + 1)
 
 
 def test_second_start_changes_nothing(tmp_path):

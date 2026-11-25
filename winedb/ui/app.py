@@ -9,7 +9,7 @@ from migrate.import_accdb import import_accdb
 from winedb.browse import table_counts, table_view
 from winedb.config import app_dir, db_path
 from winedb.db import connect
-from winedb.ui import invoice_header, menu, stock_change, stock_mass  # noqa: F401  (register the pages)
+from winedb.ui import invoice_header, invoice_lines, menu, stock_change, stock_mass  # noqa: F401  (register the pages)
 
 
 def _load(name: str | None):
