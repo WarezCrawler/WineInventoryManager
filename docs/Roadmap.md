@@ -4,7 +4,7 @@ This page shows the plan on one page: what each version contains, in which order
 
 | Version | Goal | Status |
 |---|---|---|
-| **1** | Replace the Access app. Copy its functions and data with minimal change. | In progress: step 9 of 10 |
+| **1** | Replace the Access app. Copy its functions and data with minimal change. | In progress: step 10 of 10 |
 | **1.x** | The Access functions that are not in version 1 (backlog). | Not started |
 | **2** | Modules, a real stock ledger, stock count, orders and deliveries. | Designed, not started |
 | **3** | Accounting, with accounts receivable and banking as optional modules. | Outline only |
@@ -27,7 +27,7 @@ This page shows the plan on one page: what each version contains, in which order
 | 6 | Stock change screen (the fields of the Access form) and mass stock registration (the Access "Import vinlager tilgange/afgange" grid) | Done |
 | 7 | Invoice header screen (create, edit, delete flag, close) | Done |
 | 8 | Invoice lines screen | Done |
-| 9 | Invoice preview and PDF (replaces the Access report `rFaktura`) | Not started |
+| 9 | Invoice preview and PDF (replaces the Access report `rFaktura`) | Done |
 | 10 | End-to-end test and parallel run with Access | Not started |
 | Release | Import the **live** Access file (the test data ends in January 2015), repeat the checks, rehearse on a copy ([Branching_Strategy.md §6](Branching_Strategy.md)) | Not started |
 
@@ -47,6 +47,11 @@ Version 1 copies Access, but not exactly. Each difference below is either decide
 | 8 | The stock change picker hides discontinued wines whose total stock is 0, and marks the others "(discontinued)". Access listed all wines. | Fewer wrong picks; stock on a discontinued wine can still be corrected | Done (owner decision) |
 | 9 | Mass stock registration also accepts the wine code, not only the wine id. | Users know the code better | Done (owner decision) |
 | 10 | A wrong invoice line is cancelled (quantity 0, status flag, not printed). Access deleted the line. | Rows are never deleted | Done (owner decision 16) |
+| 11 | The invoice PDF prints the lines of each wine house in the order they were entered. Access had no order there, so its order looked random. | A fixed order that the user can follow | Done |
+| 12 | "Create PDF" asks before it replaces a PDF that exists. Access replaced it without asking. | Your decision (decision 12) | Done |
+| 13 | The invoice PDF prints the full wine house name. Access cut long names, for example "St. Martin de la Garr". | Nothing is gained by cutting the name | Done |
+| 14 | An invoice whose customer has no name still gets a PDF. Access stopped without a message. | The user gets the PDF | Done |
+
 **Rule for version 1 (owner, 2026-11-21): keep data transformations to a minimum.** The data is loaded 1:1 and the schema does not change after `001_init.sql`. The screens store only the fields that the Access forms stored. So these planned additions **moved to version 2**:
 
 **One exception (owner, 2026-11-25):** the flag `invoice_lines.is_deleted` (migration `002`, decision 16). A wrong invoice line is cancelled: quantity 0, the flag set, never printed. It does not change the 1:1 import: the import still loads into schema version 1, and the program upgrades the file.
@@ -58,7 +63,7 @@ Version 1 copies Access, but not exactly. Each difference below is either decide
 
 The effect: in step 2b, the mapping from comment to type of change must also cover the stock movements entered with version 1.
 
-**Invoice PDF:** in version 1, step 9 (owner decision, 2026-11-21). In Access, the invoice report (`rFaktura`) is part of the daily work.
+**Invoice PDF:** in version 1, step 9 (owner decision, 2026-11-21). In Access, the invoice report (`rFaktura`) is part of the daily work. The printed invoice keeps the Danish labels of Access (owner decision 17, 2026-11-25); the screens stay in English.
 
 ## Version 1.x: the rest of the Access functions
 

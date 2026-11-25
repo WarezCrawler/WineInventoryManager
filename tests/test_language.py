@@ -1,5 +1,8 @@
 """The program is in British English (design doc §2): no Danish text in the program code or the schema.
-The data is never translated, and migrate/ keeps the Access names of the source, so both are not checked."""
+The data is never translated, and migrate/ keeps the Access names of the source, so both are not checked.
+
+One exception, owner decision 17: the printed invoice keeps the Danish labels of the Access report. They are
+in winedb/invoice_print.py (PRINT_LABELS), with the Danish letters written as Unicode escapes."""
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent

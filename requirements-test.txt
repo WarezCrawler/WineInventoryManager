@@ -1,5 +1,6 @@
 # What the tests need (CI installs this). The click-through tests (tests/test_ui.py) need NiceGUI and
-# pytest-asyncio; they do not need pywebview or access-parser.
+# pytest-asyncio, the invoice PDF tests need ReportLab; they do not need pywebview or access-parser.
 nicegui>=3,<4
+reportlab>=4,<5
 pytest>=9,<10
 pytest-asyncio>=1,<2

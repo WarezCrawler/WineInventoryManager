@@ -54,6 +54,7 @@ def invoice_lines_page(invoice_id: int):
         ui.label(f"Invoice {invoice_id} – lines").classes("text-xl font-bold")
         ui.space()
         ui.link("Invoice details", f"/invoice/{invoice_id}").classes("text-white")
+        ui.link("Invoice preview", f"/invoice/{invoice_id}/preview").classes("text-white")
         ui.link("Main menu", "/").classes("text-white")
     if header is None:
         ui.label(f"Invoice {invoice_id} does not exist.").classes("text-negative")

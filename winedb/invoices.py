@@ -155,10 +155,11 @@ LINE_FIELDS = ("item_id", "warehouse_id", "quantity", "sales_price", "price_type
 
 
 def lines(conn: sqlite3.Connection, invoice_id: int) -> list[dict]:
-    """Return the lines of an invoice in the order they were entered, with the wine's code and name and the
-    warehouse name. Cancelled lines are included, with `is_deleted = 1`."""
+    """Return the lines of an invoice in the order they were entered, with the wine's code, name, vintage,
+    producer and type and the warehouse name. Cancelled lines are included, with `is_deleted = 1`."""
     rows = conn.execute(
-        "SELECT l.sales_line_id, l.item_id, i.item_code, i.name, i.vintage, l.warehouse_id, w.warehouse_name,"
+        "SELECT l.sales_line_id, l.item_id, i.item_code, i.name, i.vintage, i.producer, i.item_type,"
+        " l.warehouse_id, w.warehouse_name,"
         " l.created_at, l.quantity, l.sales_price, l.price_type, l.vat_rate, l.discount, l.cost_price,"
         " l.amount_ex_vat, l.amount_incl_vat, l.amount_cost, l.comment, COALESCE(l.is_deleted, 0) AS is_deleted"
         " FROM invoice_lines AS l"
