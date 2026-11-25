@@ -46,3 +46,19 @@ def resolve_item(conn: sqlite3.Connection, key: str) -> tuple[dict | None, str |
                       f"(id {by_code['item_id']}). Use the code.")
     item = by_id or by_code
     return (item, None) if item else (None, f"No wine has the id or code '{key}'.")
+
+
+CUSTOMER_COLUMNS = ("customer_id", "customer_name", "address", "postal_code", "city", "phone", "is_hidden")
+
+
+def list_customers(conn: sqlite3.Connection) -> list[dict]:
+    """Return the customers for the customer picker: those that are not hidden, sorted by name, as the Access
+    invoice form (fFaktura) listed them. Upper and lower case and Danish letters sort the same way."""
+    rows = conn.execute(f"SELECT {', '.join(CUSTOMER_COLUMNS)} FROM customers WHERE COALESCE(is_hidden, 0) <> 1")
+    return sorted((dict(r) for r in rows), key=lambda c: ((c["customer_name"] or "").casefold(), c["customer_id"]))
+
+
+def get_customer(conn: sqlite3.Connection, customer_id) -> dict | None:
+    """Return one customer (hidden or not), or None if no customer has this id."""
+    row = conn.execute(f"SELECT {', '.join(CUSTOMER_COLUMNS)} FROM customers WHERE customer_id = ?", (customer_id,)).fetchone()
+    return dict(row) if row else None

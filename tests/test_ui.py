@@ -11,7 +11,7 @@ from nicegui.testing import User
 
 from winedb.db import connect
 
-PAGE_MODULES = ("winedb.ui.menu", "winedb.ui.stock_change", "winedb.ui.stock_mass", "winedb.ui.app")
+PAGE_MODULES = ("winedb.ui.menu", "winedb.ui.stock_change", "winedb.ui.stock_mass", "winedb.ui.invoice_header", "winedb.ui.app")
 
 
 @pytest.fixture
@@ -20,7 +20,7 @@ def db(tmp_path, monkeypatch):
     monkeypatch.setenv("WINE_DB_PATH", str(path))
     conn = connect(path)
     conn.executescript("""
-        INSERT INTO customers (customer_id, customer_name) VALUES (7, 'Æble Ørsted');
+        INSERT INTO customers (customer_id, customer_name, address, postal_code, city) VALUES (7, 'Æble Ørsted', 'Vej 1', 8000, 'Århus');
         INSERT INTO invoice_header (invoice_id, customer_id, is_closed, is_deleted) VALUES
             (1, 7, 0, 0), (2, 7, 1, 0), (3, 0, 0, 0), (4, 7, 0, 1);
         INSERT INTO items (item_id, item_code, name, vintage, item_type, bottle_size, country)
@@ -263,3 +263,90 @@ async def test_mass_registration_warehouse_and_wine_cells_have_lists_and_show_na
     assert editor.startswith("class {") and "datalist" in editor and "getValue()" in editor
     assert '["21_fejl", "21_fejl' in editor and "Gone with stock 2002" in editor and '"OLD_EMPTY"' not in editor
     assert "warehouse_name" not in columns and "wine_name" not in columns
+
+
+# --- Invoice header screen (step 7) ---
+
+def header_row(db, invoice_id):
+    conn = connect(db)
+    try:
+        row = conn.execute("SELECT * FROM invoice_header WHERE invoice_id = ?", (invoice_id,)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+async def test_menu_invoice_details_without_selection_opens_a_new_invoice(screen: User):
+    await screen.open("/")
+    screen.find("Invoice details").click()
+    await screen.should_see("New invoice")
+
+
+async def test_new_invoice_is_created_with_a_customer_and_stored_as_access_would(screen: User, db):
+    await screen.open("/invoice/new")
+    assert not element(screen, ui.button, "Close invoice").enabled          # nothing to close yet
+    screen.find("Save").click()
+    await screen.should_see("Choose a customer.")                         # a new invoice needs a customer
+    element(screen, ui.select, "Customer").value = 7
+    await screen.should_see("Vej 1")                                      # the customer's address, read-only
+    element(screen, ui.select, "Default warehouse").value = 2
+    element(screen, ui.input, "Invoice date").value = "2026-11-21"
+    element(screen, ui.textarea, "Comment").value = "Tasting"
+    screen.find("Save").click()
+    await screen.should_see("Invoice 5")                                  # the next number; the page shows it
+    assert header_row(db, 5) == {"invoice_id": 5, "customer_id": 7, "is_closed": 0, "comment": "Tasting",
+                                 "warehouse_id": 2, "invoice_date": "2026-11-21 00:00:00",
+                                 "hide_subtotals": 0, "is_deleted": 0}
+
+
+async def test_open_invoice_is_edited_and_only_changes_are_saved(screen: User, db):
+    await screen.open("/invoice/1")
+    await screen.should_see("Invoice 1")
+    assert element(screen, ui.select, "Customer").value == 7
+    element(screen, ui.checkbox, "Hide subtotals").value = True
+    screen.find("Save").click()
+    await screen.should_see("Invoice 1 is saved.")
+    assert header_row(db, 1)["hide_subtotals"] == 1 and header_row(db, 1)["customer_id"] == 7
+
+
+async def test_old_draft_without_customer_can_get_a_comment(screen: User, db):
+    await screen.open("/invoice/3")
+    await screen.should_see("(no customer)")
+    element(screen, ui.textarea, "Comment").value = "Still a draft"
+    screen.find("Save").click()
+    await screen.should_see("Invoice 3 is saved.")
+    assert header_row(db, 3)["comment"] == "Still a draft" and header_row(db, 3)["customer_id"] == 0
+
+
+async def test_delete_flag_shows_the_access_warning_and_is_saved(screen: User, db):
+    await screen.open("/invoice/1")
+    element(screen, ui.checkbox, "Delete").value = True
+    await screen.should_see("Be aware that this invoice will be suppressed")
+    screen.find("Save").click()
+    await screen.should_see("Invoice 1 is saved.")
+    assert header_row(db, 1)["is_deleted"] == 1
+
+
+async def test_close_asks_first_then_the_invoice_is_closed_and_read_only(screen: User, db):
+    await screen.open("/invoice/1")
+    screen.find("Close invoice").click()
+    await screen.should_see("Close invoice 1? A closed invoice cannot be changed.")
+    screen.find(marker="cancel-close").click()
+    assert header_row(db, 1)["is_closed"] == 0
+    screen.find("Close invoice").click()
+    await screen.should_see("Close invoice 1?")
+    screen.find(marker="confirm-close").click()
+    await screen.should_see("This invoice is closed. It cannot be changed.")
+    assert header_row(db, 1)["is_closed"] == 1
+
+
+async def test_closed_invoice_is_read_only(screen: User):
+    await screen.open("/invoice/2")
+    await screen.should_see("This invoice is closed. It cannot be changed.")
+    assert not element(screen, ui.button, "Save").enabled
+    assert not element(screen, ui.select, "Customer").enabled
+
+
+async def test_unknown_invoice(screen: User):
+    await screen.open("/invoice/999")
+    await screen.should_see("Invoice 999 does not exist.")
