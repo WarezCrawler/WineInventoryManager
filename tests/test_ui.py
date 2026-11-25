@@ -11,7 +11,7 @@ from nicegui.testing import User
 
 from winedb.db import connect
 
-PAGE_MODULES = ("winedb.ui.menu", "winedb.ui.stock_change", "winedb.ui.stock_mass", "winedb.ui.invoice_header", "winedb.ui.invoice_lines", "winedb.ui.invoice_preview", "winedb.ui.app")
+PAGE_MODULES = ("winedb.ui.menu", "winedb.ui.stock_change", "winedb.ui.stock_mass", "winedb.ui.invoice_header", "winedb.ui.invoice_lines", "winedb.ui.invoice_preview", "winedb.ui.master_screens", "winedb.ui.closed_invoices", "winedb.ui.app")
 
 
 @pytest.fixture
@@ -79,7 +79,7 @@ async def test_menu_lists_open_invoices_in_english(screen: User):
 async def test_menu_open_invoice_needs_a_selection_and_later_buttons_are_disabled(screen: User):
     await screen.open("/")
     assert not element(screen, ui.button, "Open invoice lines").enabled
-    assert element(screen, ui.button, "Wine list").props.get("disable") is True
+    assert element(screen, ui.button, "Stock report").props.get("disable") is True
 
 
 async def test_menu_stock_change_button_opens_the_screen(screen: User):
@@ -582,3 +582,143 @@ async def test_create_pdf_without_a_pdf_folder_says_what_to_do(screen: User, tmp
 async def test_preview_of_an_unknown_invoice(screen: User, pdf_folder):
     await screen.open("/invoice/99/preview")
     await screen.should_see("Invoice 99 does not exist.")
+
+
+# --- Master data and reopening an invoice (step 10) ---
+
+def query(db, sql, *args):
+    conn = connect(db)
+    try:
+        return [tuple(r) for r in conn.execute(sql, args)]
+    finally:
+        conn.close()
+
+
+def pick_row(user: User, marker: str, key: str, value):
+    """What the browser sends when the user clicks a row of the list with this marker."""
+    grid = user.find(marker=marker).elements.pop()
+    row = next(r for r in grid.rows if r[key] == value)
+    user.find(marker=marker).trigger("selection", {"rows": [row], "keys": [value], "added": True})
+
+
+def main_list(user: User):
+    return user.find(marker="list").elements.pop()
+
+
+async def test_menu_master_data_buttons_open_the_screens(screen: User):
+    for caption, title in (("Wine list", "Wines"), ("Maintain customers", "Customers"), ("Warehouses", "Warehouses"),
+                           ("Reopen closed invoice", "Closed invoices"), ("Sales price list", "Sales prices")):
+        await screen.open("/")
+        assert element(screen, ui.button, caption).enabled
+        screen.find(kind=ui.button, content=caption).click()
+        await screen.should_see(title)
+
+
+async def test_add_a_wine_then_its_prices(screen: User, db):
+    await screen.open("/wines")
+    await screen.should_see("New wine")
+    await screen.should_see("Save the new wine first")
+    element(screen, ui.input, "Wine code").value = "NEW_1"
+    element(screen, ui.input, "Name").value = "Ancely"
+    element(screen, ui.number, "Vintage").value = 2007
+    element(screen, ui.input, "Type").value = "Rød"                        # a data value, as it is
+    screen.find(marker="save").click()
+    await screen.should_see("is saved.")
+    [(item_id, name, vintage, kind)] = query(db, "SELECT item_id, name, vintage, item_type FROM items WHERE item_code = 'NEW_1'")
+    assert (name, vintage, kind) == ("Ancely", 2007, "Rød")
+    await screen.should_see(f"The prices of wine {item_id}.")              # the new wine stays on the screen
+    element(screen, ui.number, "Price incl. VAT").value = 165
+    assert element(screen, ui.number, "VAT %").value == 25                  # the default
+    screen.find(kind=ui.button, content="Save sales price").click()
+    await screen.should_see("The sales price is saved.")
+    element(screen, ui.number, "Cost price").value = 80
+    screen.find(kind=ui.button, content="Save cost price").click()
+    await screen.should_see("The cost price is saved.")
+    assert query(db, "SELECT sales_price, vat_rate FROM prices_sales WHERE item_id = ?", item_id) == [(165, 0.25)]
+    assert query(db, "SELECT price_type, cost_price FROM prices_cost WHERE item_id = ?", item_id) == [("Standard", 80)]
+
+
+async def test_wine_problems_are_marked_at_the_fields(screen: User, db):
+    await screen.open("/wines")
+    element(screen, ui.input, "Wine code").value = "ra_10"                  # the code of wine 10 (case ignored)
+    screen.find(marker="save").click()
+    await screen.should_see("The wine is not saved")
+    assert element(screen, ui.input, "Wine code").props["error-message"] == "Another wine (id 10) has the code ra_10."
+    assert element(screen, ui.input, "Name").props["error-message"] == "Enter the name."
+    assert element(screen, ui.number, "Vintage").props["error-message"] == "Enter the vintage."
+
+
+async def test_edit_and_delete_a_wine_as_access(screen: User, db):
+    await screen.open("/wines")
+    pick_row(screen, "list", "item_id", 11)
+    await screen.should_see("Wine 11")
+    element(screen, ui.input, "Country").value = "Italien"
+    screen.find(marker="save").click()
+    await screen.should_see("Wine 11 is saved.")
+    assert query(db, "SELECT country FROM items WHERE item_id = 11") == [("Italien",)]
+    screen.find(marker="flag").click()                                     # "Delete (discontinue)"
+    await screen.should_see("It is marked discontinued")
+    screen.find(marker="flag-yes").click()
+    await screen.should_see("Wine 11 is discontinued.")
+    assert query(db, "SELECT is_discontinued FROM items WHERE item_id = 11") == [(1,)]
+    assert 11 not in {r["item_id"] for r in main_list(screen).rows}          # the list hides it, as Access
+    screen.find(marker="flag").click()                                     # now "Restore", no question
+    await screen.should_see("Wine 11 is restored.")
+    assert query(db, "SELECT is_discontinued FROM items WHERE item_id = 11") == [(0,)]
+
+
+async def test_delete_a_sales_price_really_deletes_it(screen: User, db):
+    await screen.open("/wines")
+    pick_row(screen, "list", "item_id", 10)
+    await screen.should_see("The prices of wine 10.")
+    pick_row(screen, "sales-price-list", "sales_price_id", 2)
+    screen.find(kind=ui.button, content="Delete sales price").click()
+    await screen.should_see("The row is removed")
+    screen.find(marker="delete-sales-price-yes").click()
+    await screen.should_see("The sales price is deleted.")
+    assert query(db, "SELECT sales_price_id FROM prices_sales WHERE item_id = 10") == [(1,)]
+
+
+async def test_customer_add_and_hide(screen: User, db):
+    await screen.open("/customers")
+    element(screen, ui.input, "Customer name").value = "New Shop"
+    element(screen, ui.number, "Postal code").value = 8000
+    element(screen, ui.input, "City").value = "Århus"
+    screen.find(marker="save").click()
+    await screen.should_see("is saved.")
+    [(number, code, city)] = query(db, "SELECT customer_id, postal_code, city FROM customers WHERE customer_name = 'New Shop'")
+    assert (code, city) == (8000, "Århus")
+    screen.find(marker="flag").click()                                     # "Delete (hide)"
+    await screen.should_see("The customer is hidden, as in Access")
+    screen.find(marker="flag-yes").click()
+    await screen.should_see(f"Customer {number} is hidden.")
+    assert query(db, "SELECT is_hidden FROM customers WHERE customer_id = ?", number) == [(1,)]
+
+
+async def test_warehouse_add_and_no_delete(screen: User, db):
+    await screen.open("/warehouses")
+    await screen.should_see("Warehouses cannot be deleted")
+    await screen.should_not_see(marker="flag")                             # no delete button
+    element(screen, ui.input, "Name").value = "Cellar"
+    screen.find(marker="save").click()
+    await screen.should_see("is saved.")
+    assert query(db, "SELECT warehouse_name FROM warehouses ORDER BY warehouse_id DESC LIMIT 1") == [("Cellar",)]
+
+
+async def test_reopen_a_closed_invoice_from_the_invoice_screen(screen: User, db):
+    await screen.open("/invoices/closed")
+    assert [r["invoice_id"] for r in main_list(screen).rows] == [2]
+    pick_row(screen, "list", "invoice_id", 2)
+    screen.find(kind=ui.button, content="Open invoice").click()
+    await screen.should_see("This invoice is closed.")
+    screen.find(kind=ui.button, content="Reopen invoice").click()
+    await screen.should_see("Reopen invoice 2?")
+    screen.find(marker="confirm-reopen").click()
+    await screen.should_see("Invoice 2 is open again.")
+    assert header_row(db, 2)["is_closed"] == 0
+
+
+async def test_open_invoice_has_no_reopen_button(screen: User):
+    await screen.open("/invoice/1")
+    await screen.should_see("Close invoice")
+    await screen.should_not_see(kind=ui.button, content="Reopen invoice")

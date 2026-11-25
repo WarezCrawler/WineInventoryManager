@@ -2,7 +2,7 @@
 
 The main functions of the app as a list, kept short. Details and rules are in [Vinlager_Python_SQLite_Design.md](Vinlager_Python_SQLite_Design.md) (section numbers in brackets).
 
-Rows are never deleted. Where a delete function exists (today only invoices) it is a soft delete (flagged).
+Rows are never deleted. A delete function is a soft delete (a flag): an invoice, an invoice line (cancelled), a wine (discontinued) and a customer (hidden). The one exception: rows of the sales and cost price lists are really deleted, as in Access (decision 19).
 
 Status: **Done** = built, **v1** = planned for the first release, **Later** = backlog (after v1).
 
@@ -30,7 +30,7 @@ Status: **Done** = built, **v1** = planned for the first release, **Later** = ba
 - 3.4 Soft delete an invoice (flagged, never removed): **Done**
 
 ## 4. Closed invoices
-- 4.1 Reopen a closed invoice: **Later**
+- 4.1 Reopen a closed invoice (on its Invoice screen; the list of closed invoices opens it): **Done** (§6.3, §6.6)
 - 4.2 Copy an invoice (new customer, today's date): **Later**
 - 4.3 Preview an invoice on screen (layout need not match the PDF): **Done** (§6.5)
 - 4.4 Create the invoice PDF directly, without a print step, saved to the PDF folder: **Done** (§6.5)
@@ -38,16 +38,16 @@ Status: **Done** = built, **v1** = planned for the first release, **Later** = ba
 
 ## 5. Customers
 - 5.1 Browse the customer table: **Done** (table browser)
-- 5.2 Maintain customers: **Later**
+- 5.2 Maintain customers: add, edit, delete (= hide, as Access): **Done** (§6.6)
 - 5.3 Customer list report: **Later**
 - 5.4 Mailing list export: **Later**
 
 ## 6. Wines, prices and warehouses
 - 6.1 Browse the tables (items, prices, warehouses): **Done** (table browser)
-- 6.2 Maintain the wine list: **Later**
-- 6.3 Maintain sales and cost prices: **Later**
-- 6.4 Price lists (sales, cost): **Later**
-- 6.5 Maintain warehouses: **Later**
+- 6.2 Maintain the wine list: add, edit, delete (= discontinue, as Access): **Done** (§6.6)
+- 6.3 Maintain sales and cost prices (on the wine screen; delete removes the row, as Access): **Done** (§6.6)
+- 6.4 Price list reports (sales, cost): **Later**
+- 6.5 Maintain warehouses: add, edit (no delete, as Access): **Done** (§6.6)
 
 ## 7. Reports
 - 7.1 Current stock report, including negative stock: **Later**

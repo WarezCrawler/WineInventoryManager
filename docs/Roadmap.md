@@ -4,7 +4,7 @@ This page shows the plan on one page: what each version contains, in which order
 
 | Version | Goal | Status |
 |---|---|---|
-| **1** | Replace the Access app. Copy its functions and data with minimal change. | In progress: step 10 of 10 |
+| **1** | Replace the Access app. Copy its functions and data with minimal change. | In progress: step 11 of 11 |
 | **1.x** | The Access functions that are not in version 1 (backlog). | Not started |
 | **2** | Modules, a real stock ledger, stock count, orders and deliveries. | Designed, not started |
 | **3** | Accounting, with accounts receivable and banking as optional modules. | Outline only |
@@ -28,7 +28,8 @@ This page shows the plan on one page: what each version contains, in which order
 | 7 | Invoice header screen (create, edit, delete flag, close) | Done |
 | 8 | Invoice lines screen | Done |
 | 9 | Invoice preview and PDF (replaces the Access report `rFaktura`) | Done |
-| 10 | End-to-end test and parallel run with Access | Not started |
+| 10 | Master data screens (wines with prices, customers, warehouses) and reopen invoice | Done |
+| 11 | End-to-end test and parallel run with Access | Not started |
 | Release | Import the **live** Access file (the test data ends in January 2015), repeat the checks, rehearse on a copy ([Branching_Strategy.md §6](Branching_Strategy.md)) | Not started |
 
 ### Differences from Access in version 1
@@ -51,6 +52,8 @@ Version 1 copies Access, but not exactly. Each difference below is either decide
 | 12 | "Create PDF" asks before it replaces a PDF that exists. Access replaced it without asking. | Your decision (decision 12) | Done |
 | 13 | The invoice PDF prints the full wine house name. Access cut long names, for example "St. Martin de la Garr". | Nothing is gained by cutting the name | Done |
 | 14 | An invoice whose customer has no name still gets a PDF. Access stopped without a message. | The user gets the PDF | Done |
+| 15 | The sales and cost prices are maintained on the wine screen, for the selected wine. Access had two separate price list forms. | A new wine gets its prices in one place | Done |
+| 16 | A closed invoice is reopened with a button on its Invoice screen. Access had a separate form with a list. | Your decision; the reverse of Close | Done |
 
 **Rule for version 1 (owner, 2026-11-21): keep data transformations to a minimum.** The data is loaded 1:1 and the schema does not change after `001_init.sql`. The screens store only the fields that the Access forms stored. So these planned additions **moved to version 2**:
 
@@ -69,18 +72,14 @@ The effect: in step 2b, the mapping from comment to type of change must also cov
 
 The Access functions that are not in version 1, in about this order of priority ([design doc §9](Vinlager_Python_SQLite_Design.md)):
 
-1. Reopen a closed invoice
-2. Copy an invoice
-3. Customer maintenance and mailing list export
-4. Wine list maintenance
-5. Sales and cost price lists
-6. Warehouse master data
-7. Settings screen
-8. Stock report and customer list
-9. Excel export
-10. Consistency check query
+1. Copy an invoice
+2. Mailing list export
+3. Settings screen
+4. Stock report and customer list
+5. Excel export
+6. Consistency check query
 
-The stock import (mass registration) moved into version 1, step 6, and the invoice PDF into step 9.
+The stock import (mass registration) moved into version 1, step 6, the invoice PDF into step 9, and the master data screens and reopening an invoice into step 10 (owner, 2026-11-25: simple editing of the lists is needed for the app to work; a dedicated master data module comes later).
 
 ## Version 2: modules and a real stock ledger
 

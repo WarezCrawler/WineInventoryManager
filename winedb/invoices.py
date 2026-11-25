@@ -148,6 +148,28 @@ def close(conn: sqlite3.Connection, invoice_id: int) -> None:
         conn.execute("UPDATE invoice_header SET is_closed = 1 WHERE invoice_id = ?", (invoice_id,))
 
 
+
+def reopen(conn: sqlite3.Connection, invoice_id: int) -> None:
+    """Reopen a closed invoice: `is_closed = 0`, the reverse of close() and nothing else (the Access form
+    fFaktura_genaaben did the same with its check box "Luk Faktura"). Step 10."""
+    header = get_header(conn, invoice_id)
+    if header is None:
+        raise ValidationError([f"Invoice {invoice_id} does not exist."])
+    if header["is_closed"] != 1:
+        raise ValidationError([f"Invoice {invoice_id} is not closed."])
+    with transaction(conn):
+        conn.execute("UPDATE invoice_header SET is_closed = 0 WHERE invoice_id = ?", (invoice_id,))
+
+
+def closed_invoices(conn: sqlite3.Connection) -> list[dict]:
+    """The closed invoices, newest first, with the customer name and the invoice date (the list of the Access
+    form fFaktura_genaaben; a left join, so an invoice without a valid customer is listed too)."""
+    rows = conn.execute(
+        "SELECT h.invoice_id, h.customer_id, c.customer_name, h.invoice_date, COALESCE(h.is_deleted, 0) AS is_deleted"
+        " FROM invoice_header AS h LEFT JOIN customers AS c ON c.customer_id = h.customer_id"
+        " WHERE h.is_closed = 1 ORDER BY h.invoice_id DESC")
+    return [dict(r) for r in rows]
+
 # --- Invoice lines (design doc §5.1, §5.2, §6.4; step 8) ---
 
 LINE_FIELDS = ("item_id", "warehouse_id", "quantity", "sales_price", "price_type", "vat_rate", "discount",

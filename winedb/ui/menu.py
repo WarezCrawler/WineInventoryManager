@@ -9,11 +9,12 @@ from winedb.ui.labels import label
 NO_CUSTOMER = "(no customer)"
 
 # The Access buttons that come after v1 (design doc §9). They are shown, but disabled.
-LATER_BUTTONS = [
-    "Maintain customers", "Customer list", "Reopen closed invoice", "Wine list",
-    "Sales price list", "Cost price list", "Warehouses", "Stock report", "Advanced settings",
-    "Export mailing list",
-]
+LATER_BUTTONS = ["Customer list", "Stock report", "Advanced settings", "Export mailing list"]
+
+# Master data and closed invoices (step 10). The two price lists are part of the wine screen.
+MASTER_DATA_BUTTONS = [("Maintain customers", "/customers"), ("Reopen closed invoice", "/invoices/closed"),
+                       ("Wine list", "/wines"), ("Sales price list", "/wines"), ("Cost price list", "/wines"),
+                       ("Warehouses", "/warehouses")]
 
 
 def _rows() -> list[dict]:
@@ -67,6 +68,9 @@ def menu_page():
                 button.disable()
             table.on_select(lambda e: [b.set_enabled(bool(e.selection)) for b in (lines_button, invoice_button)])
 
+            ui.separator()
+            for caption, path in MASTER_DATA_BUTTONS:
+                ui.button(caption, on_click=lambda path=path: ui.navigate.to(path)).props("no-caps flat").classes("w-full")
             ui.separator()
             for caption in LATER_BUTTONS:
                 ui.button(caption).props("no-caps flat disable").classes("w-full").tooltip("Comes after v1")
