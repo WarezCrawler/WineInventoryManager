@@ -6,11 +6,13 @@ TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"   # the format of all date and time colum
 
 
 class ValidationError(ValueError):
-    """A write was refused. `problems` lists each reason as a sentence for the user."""
+    """A write was refused. `problems` lists each reason as a sentence for the user. `fields` maps a column
+    name to its problem, when the problem belongs to one field (the screens mark that field)."""
 
-    def __init__(self, problems: list[str]):
+    def __init__(self, problems: list[str], fields: dict[str, str] | None = None):
         super().__init__(" ".join(problems))
         self.problems = problems
+        self.fields = fields or {}
 
 
 def now_text() -> str:

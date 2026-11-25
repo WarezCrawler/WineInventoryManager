@@ -4,7 +4,7 @@ from datetime import date
 from nicegui import ui
 
 from winedb.db import connect
-from winedb.invoices import close, create_header, get_header, set_deleted, update_header
+from winedb.invoices import close, create_header, get_header, reopen, set_deleted, update_header
 from winedb.masterdata import get_customer, list_customers, list_warehouses
 from winedb.ui.labels import label
 from winedb.validation import ValidationError
@@ -70,6 +70,14 @@ def _invoice_page(invoice_id: int | None) -> None:
             ui.label("This invoice is closed. It cannot be changed.").classes("font-bold text-warning")
         elif header and header["is_deleted"] == 1:
             ui.label("This invoice has the delete flag.").classes("font-bold text-warning")
+        with ui.row():                       # layout (owner): the buttons above the form
+            save = ui.button("Save").props("no-caps")
+            close_button = ui.button("Close invoice").props("no-caps outline")
+            lines = ui.button("Open lines").props("no-caps flat")
+            reopen_button = ui.button("Reopen invoice").props("no-caps outline")
+            reopen_button.set_visibility(closed)
+            ui.button("Back", on_click=lambda: ui.navigate.to("/")).props("no-caps flat")
+        problems = ui.label("").classes("text-negative")
         customer = ui.select({c["customer_id"]: _customer_text(c) for c in customers}, label="Customer (type to search)",
                              with_input=True, value=stored["customer_id"] if stored["customer_id"] in by_id else None
                              ).classes("w-full")
@@ -86,12 +94,6 @@ def _invoice_page(invoice_id: int | None) -> None:
         comment = ui.textarea(label("comment"), value=stored["comment"]).classes("w-full")
         hide_subtotals = ui.checkbox(label("hide_subtotals"), value=stored["hide_subtotals"])
         deleted = ui.checkbox("Delete (the invoice is suppressed; the row stays)", value=stored["is_deleted"])
-        problems = ui.label("").classes("text-negative")
-        with ui.row():
-            save = ui.button("Save").props("no-caps")
-            close_button = ui.button("Close invoice").props("no-caps outline")
-            lines = ui.button("Open lines").props("no-caps flat")
-            ui.button("Back", on_click=lambda: ui.navigate.to("/")).props("no-caps flat")
 
     fields = (customer, warehouse, invoice_date, comment, hide_subtotals, deleted)
     if closed:
@@ -171,6 +173,28 @@ def _invoice_page(invoice_id: int | None) -> None:
         ui.notify(f"Invoice {invoice_id} is closed.", type="positive")
         ui.navigate.to(f"/invoice/{invoice_id}")
 
+    async def on_reopen() -> None:
+        with ui.dialog() as dialog, ui.card():
+            ui.label(f"Reopen invoice {invoice_id}? Its header and lines can then be changed again.")
+            with ui.row():
+                ui.button("Reopen invoice", on_click=lambda: dialog.submit(True)).props("no-caps").mark("confirm-reopen")
+                ui.button("Cancel", on_click=lambda: dialog.submit(False)).props("no-caps flat").mark("cancel-reopen")
+        answer = await dialog
+        dialog.delete()
+        if not answer:
+            return
+        conn = connect()
+        try:
+            reopen(conn, invoice_id)
+        except ValidationError as e:
+            problems.text = " ".join(e.problems)
+            return
+        finally:
+            conn.close()
+        ui.notify(f"Invoice {invoice_id} is open again.", type="positive")
+        ui.navigate.to(f"/invoice/{invoice_id}")
+
+    reopen_button.on_click(on_reopen)
     customer.on_value_change(lambda _: show_customer())
     deleted.on_value_change(on_deleted_change)
     save.on_click(on_save)

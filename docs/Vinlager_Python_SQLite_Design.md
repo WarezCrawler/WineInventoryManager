@@ -27,6 +27,7 @@ The plan follows [access-analysis/Vinlager_Python_Rebuild_Plan.md](access-analys
 2. Stock change screen (replaces `fVinlager_Change`).
 3. Invoice screens: the invoice header (`fFaktura`) and the invoice lines (`fVinlager_Salg`), including closing an invoice.
 4. Invoice preview on screen and invoice PDF (replaces the Access report `rFaktura`; moved into v1 by the owner, 2026-11-21).
+5. Simple maintenance of the master data (wines with their prices, customers, warehouses) and reopening a closed invoice (moved into v1 by the owner, 2026-11-25; decision 18).
 
 **Not in v1:** the backlog in §9. v1 does not improve the data model: it copies the tables and columns 1:1.
 
@@ -207,7 +208,7 @@ A stock movement with a negative quantity removes or corrects stock; 341 of the 
 **Difference from Access:** the calculation leaves out the invoice lines of soft-deleted invoices (`is_deleted = 1`), because calculations must leave out flagged invoices. Access counted them (`TotalVinQ` sums `uVinlager`, which does not filter on `Delete`). In the January 2015 export, the one soft-deleted invoice (149) has no lines, so the results are the same. Lines whose invoice row does not exist still count, as in Access. Access never stopped a sale or removal that made stock negative, so v1 does not either.
 
 ### 5.4 Invoice rules
-- **Open invoice:** an invoice with `is_closed = 0`. Invoice lines can be added or changed only on open invoices. (The Access line form uses the query `qVinlager_Salg`, which filters on `is_closed <> True`.) To close an invoice, the app sets `invoice_header.is_closed = 1`. Reopening a closed invoice is a separate screen in the backlog (§9).
+- **Open invoice:** an invoice with `is_closed = 0`. Invoice lines can be added or changed only on open invoices. (The Access line form uses the query `qVinlager_Salg`, which filters on `is_closed <> True`.) To close an invoice, the app sets `invoice_header.is_closed = 1`. To reopen it, the app sets `is_closed = 0` (step 10, the button "Reopen invoice" on the Invoice screen, §6.3).
 - **Defaults for a new invoice line:**
   - `invoice_id`: the selected invoice.
   - `warehouse_id`: the invoice's `warehouse_id` (`GetDefaultLagerID`). This column is `NOT NULL` on invoice lines, so if the invoice has no warehouse, the user must pick one. 3 invoices have no warehouse.
@@ -227,6 +228,8 @@ For the selected wine and warehouse, the screen shows the wine's name, vintage, 
 
 ## 6. Screens
 
+**Layout of every screen (owner, 2026-11-25):** the buttons (Save and the others) are at the top, the problem messages directly below them, then the form, and the list at the bottom. A screen with a form and a list (invoice lines, stock change, master data) therefore shows the form first.
+
 ### 6.1 Main menu (from `fNavigation`)
 The title is "Wine Inventory Manager". On the left is the list of **open invoices** (`is_closed <> 1`), newest first, with the invoice number, customer number and customer name. All text in the app is British English, so the buttons have English captions; the table shows the Access caption for reference:
 
@@ -237,7 +240,8 @@ The title is "Wine Inventory Manager". On the left is the list of **open invoice
 | Stock change (new entry) | Open Vinlager tilgange/afgange | **yes** |
 | Mass stock registration (§6.2.1) | Import vinlager tilgange/afgange | **yes** |
 | Generate invoice (preview and PDF, step 9) | Generer Faktura | **yes** (done in step 9; it opens the preview of the selected invoice) |
-| Maintain customers, Customer list, Reopen closed invoice, Wine list, Sales price list, Cost price list, Warehouses, Stock report, Advanced settings, Export mailing list | Vedligehold Kundedata, List Kunder, Gen­åben lukkede faktura, Vinliste, Prisliste Salg, Prisliste Cost, Open Lager Stamdata, Vis lagerrapport, Show advanced settings, Mail Liste Export | shown disabled (backlog) |
+| Maintain customers, Reopen closed invoice, Wine list, Sales price list, Cost price list, Warehouses (§6.6) | Vedligehold Kundedata, Gen­åben lukkede faktura, Vinliste, Prisliste Salg, Prisliste Cost, Open Lager Stamdata | **yes** (step 10; the two price lists open the wine screen) |
+| Customer list, Stock report, Advanced settings, Export mailing list | List Kunder, Vis lagerrapport, Show advanced settings, Mail Liste Export | shown disabled (backlog) |
 | Quit | Quit | yes |
 
 In Access, the open-invoice list uses an **inner join to the customers**, so the 4 draft invoices with customer `0` do not show. The new app uses a **left join** (the default of decision 2 in §10) and shows "(no customer)", so the user can finish or delete these drafts.
@@ -279,7 +283,7 @@ The screen is at `/invoice/new` and `/invoice/<number>`; the main menu button "I
 - **Default warehouse** (optional, as in Access), **invoice date** (a calendar; today for a new invoice, decision 3; stored as `YYYY-MM-DD 00:00:00` like Access), **comment**, **hide subtotals**.
 - **Delete:** the soft-delete flag. Setting it shows the Access warning in English: "Be aware that this invoice will be suppressed, and must have zero quantity and amounts!"
 
-Buttons: **Save** (saves only the changed fields), **Close invoice** (asks first, saves open changes, then sets `is_closed = 1` and nothing else, decision 8), **Open lines** (step 8), **Back**. A closed invoice opens read-only. The data functions are `invoices.create_header()`, `update_header()`, `set_deleted()` and `close()`; only `set_deleted()` and `close()` change the status of an invoice.
+Buttons: **Save** (saves only the changed fields), **Close invoice** (asks first, saves open changes, then sets `is_closed = 1` and nothing else, decision 8), **Open lines** (step 8), **Reopen invoice** (only on a closed invoice; asks first, then sets `is_closed = 0` and nothing else, the reverse of Close; step 10), **Back**. A closed invoice opens read-only. The data functions are `invoices.create_header()`, `update_header()`, `set_deleted()`, `close()` and `reopen()`; only `set_deleted()`, `close()` and `reopen()` change the status of an invoice.
 
 ### 6.4 Invoice lines screen
 The screen is at `/invoice/<number>/lines`. The main menu button "Open invoice lines" and the button "Open lines" on the invoice header screen open it. As the Access split form, it has a grid of the lines and, below it, an entry panel for one line:
@@ -306,6 +310,22 @@ The screen is at `/invoice/<number>/preview`. The main menu button "Generate inv
 
 The functions are `invoice_print.invoice_document()` (the content, used by the preview and by the PDF), `pdf_file_name()`, `pdf_path()` and `write_pdf()`.
 
+### 6.6 Master data screens and closed invoices (step 10)
+Simple maintenance of the master data, so that the app works on its own (owner, 2026-11-25, decision 18). A dedicated master data module comes later (version 2). Each screen has a list with a filter and an edit panel with **Save**, **New**, **Undo** and, where Access had one, **Delete**. A problem is shown in red at the field, in the line above the buttons and in a pop-up. The checks are on write only: a new row checks every field; a changed row checks only the changed fields, so an old row that breaks a rule can still be edited.
+
+| Screen | Replaces | Fields | Delete (as in Access) |
+|---|---|---|---|
+| Wines (`/wines`) | `fVinliste_Vedligehold` | code (unique, case ignored), name, vintage (required), producer, country, region, type, bottle size, drink-by year, mature year, private, comment | **Delete (discontinue)** sets `is_discontinued`, the Access "Udgået"; **Restore** removes it. The list hides discontinued wines unless "Show discontinued wines" is ticked, as the Access form did. |
+| Sales prices, cost prices (on the wine screen, for the selected wine) | `fPrisliste_Salg`, `fPrisliste_Cost` | price type, price incl. VAT, VAT % (default 25); price type (default "Standard"), cost price | **Delete** removes the row, after a question (decision 19). |
+| Customers (`/customers`) | `fKunder` | name (required), first name, last name, address, postal code (whole number), city, phone, email, mailing list, comment | **Delete (hide)** sets `is_hidden`, the Access "Skjul kunde"; **Show again** removes it. Hidden customers are not in the list (unless "Show hidden customers" is ticked) or in the invoice picker. |
+| Warehouses (`/warehouses`) | `fLagre` | name (required), comment | None: Access did not allow it. |
+
+Producer, country, region, type, bottle size and price type are free text that suggests the values in the data while the user types. The Access value lists (for example `Alm;Halv;Magnum;Db. Mgm;50 cl.`) are data values, so they are not written into the program; the data also has `MGM` and `DMGM`.
+
+**Closed invoices** (`/invoices/closed`, the main menu button "Reopen closed invoice"; replaces the list of `fFaktura_genåben`): the closed invoices, newest first. The user picks one and opens its Invoice screen, which has the button **Reopen invoice** (§6.3).
+
+The data functions are in `winedb/masterdata.py` (`save_wine()`, `set_wine_discontinued()`, `save_sales_price()`, `save_cost_price()`, `delete_sales_price()`, `delete_cost_price()`, `save_customer()`, `set_customer_hidden()`, `save_warehouse()`, `suggestions()`), and `invoices.reopen()` and `closed_invoices()`. The screens are built by `winedb/ui/forms.py` from a description of their fields (`winedb/ui/master_screens.py`).
+
 ## 7. Code layout
 
 ```
@@ -322,10 +342,12 @@ WineInventoryManager/   # project root
     stock.py         # on_hand(), add_movement(), recent_movements()
     invoices.py      # open_invoices(), get/save_header(), lines(), save_line(), close()
     invoice_print.py # the invoice document and its PDF (ReportLab): invoice_document(), write_pdf()
+    masterdata.py    # wines, prices, customers, warehouses: read, save, the Access "delete" (step 10)
     browse.py        # read-only table content for the table browser (no UI imports)
     ui/              # the whole front-end, and the only place that imports NiceGUI/pywebview:
                      #   app.py (table browser, import dialog), menu, stock_change, stock_mass, invoice_header,
-                     #   invoice_lines, invoice_preview and labels.py (user-friendly column names). tests/test_architecture.py
+                     #   invoice_lines, invoice_preview, master_screens and closed_invoices (step 10), forms.py (the shared
+                     #   master data screen) and labels.py (user-friendly column names). tests/test_architecture.py
                      #   fails if any other code imports the UI libraries or if the back-end imports winedb.ui
   migrate/
     column_map.py    # Access -> English table and column names (§4.1)
@@ -361,24 +383,23 @@ Do the steps in order. Each step has a check; the step is complete when the chec
    *Check:* enter three historical invoices again: one with a `discount`, one with 0% VAT and one with a negative quantity. The new invoice lines have the same values as the stored ones. Closed invoices are read-only.
 9. **Invoice preview and PDF** (decision 12 in §10, replaces `rFaktura`; §6.5). **Done.** The golden test makes the PDF of the five reference invoices (62: 0 % VAT, two pages; 66: negative quantities, two pages; 83: a discount, and again with "Hide subtotals"; 116: plain). It compares the text with the Access PDF: every amount, every wine line, the labels, the header numbers, the three texts and the number of pages are the same. The test needs `pdftotext` (poppler) and the reference PDFs. Only the order of the lines in a wine house can differ (§6.5). The preview on screen and the PDF use the line and total calculation of §5.1. The PDF is made directly with ReportLab and saved to the PDF folder from `settings.json`. The texts (address, bank details, payment terms) come from `settings.json` when the PDF is made; the saved PDF keeps them.
    *Check:* for each reference invoice in `export/reference_invoices/`, the new PDF shows the same lines, totals and texts.
-10. **End-to-end test and parallel run.** Use a copy of the database after the Access import. Enter the same new invoice and the same stock change in Access and in the new app, then compare the stored rows.
+10. **Master data screens and reopen invoice** (§6.3, §6.6; decisions 18 and 19). **Done.** Wines with their sales and cost prices, customers and warehouses can be added, changed and "deleted" as in Access. A closed invoice can be reopened from its Invoice screen.
+   *Check:* a new wine with a sales price and a cost price can be picked on an invoice line, and gets the Standard cost. A deleted wine leaves the lists and the pickers and can be restored. A hidden customer leaves the invoice picker. A reopened invoice is the same row as before it was closed, except `is_closed`.
+11. **End-to-end test and parallel run.** Use a copy of the database after the Access import. Enter the same new invoice and the same stock change in Access and in the new app, then compare the stored rows.
 
 The numbers in the checks come from an old copy of the Access data (see "Old copy of the data" under Risks in §10).
 
 ## 9. Backlog (not in v1)
 
-These functions of the Access app come after v1, in about this order of priority. The invoice PDF moved into v1 (step 9). Specification: `export/report_spec/rFaktura.spec.json`; reference PDFs: `export/reference_invoices/`.
+These functions of the Access app come after v1, in about this order of priority. The invoice PDF moved into v1 (step 9), and the master data screens and reopening an invoice into step 10. Specification: `export/report_spec/rFaktura.spec.json`; reference PDFs: `export/reference_invoices/`.
 
-1. **Reopen a closed invoice** (`fFaktura_genåben`).
-2. **Copy an invoice** (`DBCopyFakt`). It copies the header with a new customer, today's date, and `is_closed`, `warehouse_id` and `hide_subtotals`. It copies the invoice lines with today's date.
-3. **Customer maintenance** and **mail list export.** The export selects customers with `on_mailing_list = 1 AND is_hidden = 0 AND email <> ''`; 128 customers match.
-4. **Wine list maintenance**, with the value lists for type (`Rød;Hvid;Rose;Desert;Mousserende`) and bottle size (`Alm;Halv;Magnum;Db. Mgm;50 cl.`). Note that the data uses `MGM` and `DMGM`.
-5. **Price lists** for sales and cost.
-6. **Warehouse** master data.
-7. **Settings screen** for `settings.json`, including the PDF folder.
-8. **Stock report** (`qVinliste`) and **customer list** (`rKundeListe`).
-9. **Excel export** (`uVinlager_Excel`).
-10. **Consistency check query.**
+1. **Copy an invoice** (`DBCopyFakt`). It copies the header with a new customer, today's date, and `is_closed`, `warehouse_id` and `hide_subtotals`. It copies the invoice lines with today's date.
+2. **Mail list export.** The export selects customers with `on_mailing_list = 1 AND is_hidden = 0 AND email <> ''`; 128 customers match.
+3. **Settings screen** for `settings.json`, including the PDF folder.
+4. **Stock report** (`qVinliste`) and **customer list** (`rKundeListe`).
+5. **Excel export** (`uVinlager_Excel`).
+6. **Consistency check query.**
+7. **A master data module** (version 2): value lists for type, bottle size and price type, and the rules that the simple screens of step 10 do not have.
 
 (The stock import, `qVinlager_Change_Import`, moved into version 1 as the mass stock registration, §6.2.1.)
 
@@ -424,6 +445,8 @@ These functions of the Access app come after v1, in about this order of priority
 | 15 | **Decided (owner, 2026-11-21): the data stays next to the program.** The database (`data\`) and `settings.json` stay in the program folder, as today; no separate data folder. `build.ps1` keeps both during a build. | Done as described |
 | 16 | **Decided (owner, 2026-11-25): a wrong invoice line is cancelled, not deleted.** "Cancel line" sets the quantity, the discount and the amounts to 0, sets the new flag `invoice_lines.is_deleted` to 1, and writes the old quantity into the comment. The row stays. A cancelled line is never printed and does not count in stock or totals. The flag is the one exception to the version 1 rule "no schema change" (migration `002`). The owner's reason: it does not change the 1:1 import; only data entered from now on is handled differently. The Access import still loads into schema version 1 (`connect(version=1)`), and the program then upgrades the file; old lines read 0 (not cancelled). | Done |
 | 17 | **Decided (owner, 2026-11-25): the printed invoice keeps the Danish labels of the Access report** ("Faktura nummer", "stk i alt", "Samlet pris", "Heraf moms" and so on) and the Danish formats of numbers and dates ("kr. 1.805,00", "03-05-2014"). The company and its customers are Danish. This is the one exception to the rule "no Danish in the program": the labels are in `invoice_print.PRINT_LABELS`, and `tests/test_language.py` names the exception. The preview on screen is in English. **Later:** read the labels from configuration. | Done |
+| 18 | **Decided (owner, 2026-11-25): simple master data maintenance and reopening an invoice are in version 1** (step 10, §6.6). "Simple editing of the lists is needed for the app to work"; a dedicated master data module comes later. **Delete works as in Access** (owner: "same method as in Access"): a wine is marked discontinued (`is_discontinued`, Access "Udgået"), a customer is hidden (`is_hidden`, Access "Skjul kunde"), and a warehouse cannot be deleted (the Access form did not allow it). Both flags can be undone. No schema change. Reopen is on the Invoice screen, the reverse of Close. | Done |
+| 19 | **Decided (owner, 2026-11-25): sales and cost price rows are really deleted**, as the Access price forms did (their "Delete" button). This is the one exception to the rule "rows are never deleted". Nothing points to a price row: each invoice line keeps its own copy of the price, the VAT rate and the price type (§5.2), so old invoices do not change. The app asks first. | Done |
 
 **Risks:**
 - **Old copy of the data:** the numbers and data facts in this document (row counts, sums, orphan rows, negative stock) come from an export whose last row is from January 2015. The live Access file is newer. The import and its check against the source do not depend on these numbers. But repeat the checks in §8 that quote them on a current copy before the release.

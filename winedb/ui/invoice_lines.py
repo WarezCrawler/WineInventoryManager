@@ -77,15 +77,19 @@ def invoice_lines_page(invoice_id: int):
     elif header["is_deleted"] == 1:
         ui.label("This invoice has the delete flag.").classes("font-bold text-warning")
 
-    columns = [{"name": c, "label": label(c), "field": c, "align": "left"} for c in GRID_COLUMNS]
-    grid = ui.table(columns=columns, rows=[], row_key="sales_line_id", selection="single").props("dense").classes("w-full")
-    total_label = ui.label("").classes("font-bold")
-
     wine_by_id = {w["item_id"]: w for w in wines}
     state = {"line_id": None, "setting": False, "price_rows": [], "cost_rows": []}
 
+    # Layout (owner): the buttons, then the form, then the list.
     with ui.card().classes("w-full"):
         panel_title = ui.label("").classes("text-lg font-bold")
+        with ui.row():
+            save = ui.button("Save line").props("no-caps")
+            new = ui.button("New line").props("no-caps flat")
+            undo = ui.button("Undo").props("no-caps flat")
+            cancel_button = ui.button("Cancel line").props("no-caps flat color=negative")
+            close_button = ui.button("Close invoice").props("no-caps outline")
+        problems = ui.label("").classes("text-negative")
         with ui.row().classes("w-full no-wrap gap-6 items-start"):
             with ui.column().classes("w-[30rem]"):
                 wine = ui.select({w["item_id"]: _wine_text(w) for w in wines}, label="Wine (type the code or the name)",
@@ -104,13 +108,10 @@ def invoice_lines_page(invoice_id: int):
                 cost_pick = ui.select({}, label="Pick a cost price").classes("w-full")
                 cost = ui.number(label="Unit cost price", format="%.2f").classes("w-full")
         amounts_label = ui.label("").classes("font-bold")
-        problems = ui.label("").classes("text-negative")
-        with ui.row():
-            save = ui.button("Save line").props("no-caps")
-            new = ui.button("New line").props("no-caps flat")
-            undo = ui.button("Undo").props("no-caps flat")
-            cancel_button = ui.button("Cancel line").props("no-caps flat color=negative")
-            close_button = ui.button("Close invoice").props("no-caps outline")
+
+    total_label = ui.label("").classes("font-bold")
+    columns = [{"name": c, "label": label(c), "field": c, "align": "left"} for c in GRID_COLUMNS]
+    grid = ui.table(columns=columns, rows=[], row_key="sales_line_id", selection="single").props("dense").classes("w-full")
 
     fields = (wine, warehouse, quantity, comment, price_pick, price, vat, discount, cost_pick, cost)
     inputs = {"wine": wine, "warehouse": warehouse, "quantity": quantity, "price": price, "vat": vat,

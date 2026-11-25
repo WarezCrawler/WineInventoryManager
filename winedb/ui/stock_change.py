@@ -38,27 +38,29 @@ def stock_change_page():
         ui.link("Mass stock registration", "/stock-mass").classes("text-white")
         ui.link("Main menu", "/").classes("text-white")
 
-    with ui.row().classes("w-full no-wrap items-start gap-8"):
-        with ui.column().classes("w-[34rem]"):
-            wine = ui.select({i["item_id"]: _item_text(i) for i in items}, label="Wine (type the code or the name)",
-                             with_input=True, clearable=True).classes("w-full")
-            details = ui.label("").classes("text-sm opacity-80")
-            warehouse = ui.select({w["warehouse_id"]: w["warehouse_name"] or f"Warehouse {w['warehouse_id']}" for w in warehouses},
-                                  label=label("warehouse_id"),
-                                  value=warehouses[0]["warehouse_id"] if len(warehouses) == 1 else None).classes("w-full")
-            quantity = ui.number(label="Quantity (negative to remove stock)", step=1, precision=0).classes("w-full")
-            comment = ui.input(label("comment")).classes("w-full")
-            date = ui.input(f"{label('created_at')} (YYYY-MM-DD HH:MM:SS)", value=now_text()).classes("w-full")
-            stock_now = ui.label("").classes("font-bold")
-            problems = ui.label("").classes("text-negative")
-            with ui.row():
-                save = ui.button("Save").props("no-caps")
-                ui.button("Cancel", on_click=lambda: ui.navigate.to("/")).props("no-caps flat")
+    # Layout (owner): the buttons, then the form, then the list.
+    with ui.card().classes("w-full"):
+        with ui.row():
+            save = ui.button("Save").props("no-caps")
+            ui.button("Cancel", on_click=lambda: ui.navigate.to("/")).props("no-caps flat")
+        problems = ui.label("").classes("text-negative")
+        with ui.row().classes("w-full no-wrap items-start gap-8"):
+            with ui.column().classes("w-[34rem]"):
+                wine = ui.select({i["item_id"]: _item_text(i) for i in items}, label="Wine (type the code or the name)",
+                                 with_input=True, clearable=True).classes("w-full")
+                details = ui.label("").classes("text-sm opacity-80")
+                warehouse = ui.select({w["warehouse_id"]: w["warehouse_name"] or f"Warehouse {w['warehouse_id']}" for w in warehouses},
+                                      label=label("warehouse_id"),
+                                      value=warehouses[0]["warehouse_id"] if len(warehouses) == 1 else None).classes("w-full")
+            with ui.column().classes("w-[34rem]"):
+                quantity = ui.number(label="Quantity (negative to remove stock)", step=1, precision=0).classes("w-full")
+                comment = ui.input(label("comment")).classes("w-full")
+                date = ui.input(f"{label('created_at')} (YYYY-MM-DD HH:MM:SS)", value=now_text()).classes("w-full")
+        stock_now = ui.label("").classes("font-bold")
 
-        with ui.column().classes("grow"):
-            ui.label("Latest 20 movements of this wine in this warehouse").classes("text-lg font-bold")
-            columns = [{"name": c, "label": label(c), "field": c, "align": "left"} for c in HISTORY_COLUMNS]
-            history = ui.table(columns=columns, rows=[], row_key="stock_line_id").props("dense").classes("w-full")
+    ui.label("Latest 20 movements of this wine in this warehouse").classes("text-lg font-bold")
+    columns = [{"name": c, "label": label(c), "field": c, "align": "left"} for c in HISTORY_COLUMNS]
+    history = ui.table(columns=columns, rows=[], row_key="stock_line_id").props("dense").classes("w-full")
 
     def refresh() -> None:
         """Show the wine details, the stock now and after the change, and the latest movements."""
