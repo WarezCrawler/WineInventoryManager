@@ -386,6 +386,10 @@ Do the steps in order. Each step has a check; the step is complete when the chec
 10. **Master data screens and reopen invoice** (§6.3, §6.6; decisions 18 and 19). **Done.** Wines with their sales and cost prices, customers and warehouses can be added, changed and "deleted" as in Access. A closed invoice can be reopened from its Invoice screen.
    *Check:* a new wine with a sales price and a cost price can be picked on an invoice line, and gets the Standard cost. A deleted wine leaves the lists and the pickers and can be restored. A hidden customer leaves the invoice picker. A reopened invoice is the same row as before it was closed, except `is_closed`.
 11. **End-to-end test and parallel run.** Use a copy of the database after the Access import. Enter the same new invoice and the same stock change in Access and in the new app, then compare the stored rows.
+   **Tools done; the parallel run by the owner is open.**
+   - *End-to-end test* (`tests/test_end_to_end.py`): the daily work through the screens on one database: a new customer, a new wine with a sales and a cost price, stock in, a new invoice with two lines (one cancelled), the preview and the PDF, close, reopen and close again. Then it checks every stored row and the on-hand stock.
+   - *Parallel run check* (`python -m migrate.parallel_run BEFORE.accdb AFTER.accdb APP.db`): it reads both Access files with the reader of the import and works out what each system changed since BEFORE. Then it compares the changes field by field: new rows in the order they were made, with their links; times of entry by date only; a line cancelled in the app and deleted in Access is a note. A real Access file compared with its own import gives PASS (test with `WINE_ACCDB`). The procedure and the scenario for the owner are in [Parallel_Run.md](Parallel_Run.md).
+   - Found with it: a new master data row now leaves an empty field out, so the column gets its Access default (for example postal code 0 for a new customer, as Access).
 
 The numbers in the checks come from an old copy of the Access data (see "Old copy of the data" under Risks in §10).
 
