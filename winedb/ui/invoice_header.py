@@ -70,6 +70,14 @@ def _invoice_page(invoice_id: int | None) -> None:
             ui.label("This invoice is closed. It cannot be changed.").classes("font-bold text-warning")
         elif header and header["is_deleted"] == 1:
             ui.label("This invoice has the delete flag.").classes("font-bold text-warning")
+        with ui.row():                       # layout (owner): the buttons above the form
+            save = ui.button("Save").props("no-caps")
+            close_button = ui.button("Close invoice").props("no-caps outline")
+            lines = ui.button("Open lines").props("no-caps flat")
+            reopen_button = ui.button("Reopen invoice").props("no-caps outline")
+            reopen_button.set_visibility(closed)
+            ui.button("Back", on_click=lambda: ui.navigate.to("/")).props("no-caps flat")
+        problems = ui.label("").classes("text-negative")
         customer = ui.select({c["customer_id"]: _customer_text(c) for c in customers}, label="Customer (type to search)",
                              with_input=True, value=stored["customer_id"] if stored["customer_id"] in by_id else None
                              ).classes("w-full")
@@ -86,14 +94,6 @@ def _invoice_page(invoice_id: int | None) -> None:
         comment = ui.textarea(label("comment"), value=stored["comment"]).classes("w-full")
         hide_subtotals = ui.checkbox(label("hide_subtotals"), value=stored["hide_subtotals"])
         deleted = ui.checkbox("Delete (the invoice is suppressed; the row stays)", value=stored["is_deleted"])
-        problems = ui.label("").classes("text-negative")
-        with ui.row():
-            save = ui.button("Save").props("no-caps")
-            close_button = ui.button("Close invoice").props("no-caps outline")
-            lines = ui.button("Open lines").props("no-caps flat")
-            reopen_button = ui.button("Reopen invoice").props("no-caps outline")
-            reopen_button.set_visibility(closed)
-            ui.button("Back", on_click=lambda: ui.navigate.to("/")).props("no-caps flat")
 
     fields = (customer, warehouse, invoice_date, comment, hide_subtotals, deleted)
     if closed:

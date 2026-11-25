@@ -228,6 +228,8 @@ For the selected wine and warehouse, the screen shows the wine's name, vintage, 
 
 ## 6. Screens
 
+**Layout of every screen (owner, 2026-11-25):** the buttons (Save and the others) are at the top, the problem messages directly below them, then the form, and the list at the bottom. A screen with a form and a list (invoice lines, stock change, master data) therefore shows the form first.
+
 ### 6.1 Main menu (from `fNavigation`)
 The title is "Wine Inventory Manager". On the left is the list of **open invoices** (`is_closed <> 1`), newest first, with the invoice number, customer number and customer name. All text in the app is British English, so the buttons have English captions; the table shows the Access caption for reference:
 

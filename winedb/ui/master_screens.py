@@ -37,17 +37,17 @@ def _price_list(*, title: str, noun: str, key: str, columns: dict, fields: list[
         ui.label(title).classes("text-lg font-bold")
         if note:
             ui.label(note).classes("text-sm opacity-70")
-        grid = ui.table(columns=[{"name": c, "label": caption, "field": c, "align": "left"} for c, caption in columns.items()],
-                        rows=[], row_key=key, selection="single").props("dense").classes("w-full").mark(f"{noun.replace(' ', '-')}-list")
-        inputs = {}
-        with ui.row().classes("w-full no-wrap"):
-            for f in fields:
-                inputs[f.name] = make_input(f, hints[f.name])
-        problems = ui.label("").classes("text-negative")
         with ui.row():
             save_button = ui.button(f"Save {noun}").props("no-caps")
             ui.button(f"New {noun}", on_click=lambda: new()).props("no-caps flat")
             delete_button = ui.button(f"Delete {noun}").props("no-caps flat color=negative")
+        problems = ui.label("").classes("text-negative")
+        inputs = {}
+        with ui.row().classes("w-full no-wrap"):
+            for f in fields:
+                inputs[f.name] = make_input(f, hints[f.name])
+        grid = ui.table(columns=[{"name": c, "label": caption, "field": c, "align": "left"} for c, caption in columns.items()],
+                        rows=[], row_key=key, selection="single").props("dense").classes("w-full").mark(f"{noun.replace(' ', '-')}-list")
     watch_marks(inputs)
 
     def refresh() -> None:

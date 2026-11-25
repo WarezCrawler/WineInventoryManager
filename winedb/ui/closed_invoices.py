@@ -23,6 +23,8 @@ def closed_invoices_page():
         ui.link("Main menu", "/").classes("text-white")
 
     ui.label("Pick an invoice and open it. Its Invoice screen has the button \"Reopen invoice\".").classes("text-sm")
+    open_button = ui.button("Open invoice", on_click=lambda: ui.navigate.to(f"/invoice/{table.selected[0]['invoice_id']}"))
+    open_button.props("no-caps").disable()
     search = ui.input("Filter the list").props("clearable dense").classes("w-80")
     columns = [{"name": c, "label": label(c), "field": c, "align": "left", "sortable": True}
                for c in ("invoice_id", "customer_id", "customer_name", "invoice_date", "is_deleted")]
@@ -30,6 +32,4 @@ def closed_invoices_page():
                      rows=[{**r, "customer_name": r["customer_name"] or NO_CUSTOMER, "invoice_date": (r["invoice_date"] or "")[:10],
                             "is_deleted": "Yes" if r["is_deleted"] else ""} for r in rows])
     table.classes("w-full max-w-4xl").props("dense").mark("list").bind_filter_from(search, "value")
-    open_button = ui.button("Open invoice", on_click=lambda: ui.navigate.to(f"/invoice/{table.selected[0]['invoice_id']}"))
-    open_button.props("no-caps").disable()
     table.on_select(lambda e: open_button.set_enabled(bool(e.selection)))

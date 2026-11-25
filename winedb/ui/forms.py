@@ -144,23 +144,10 @@ def master_screen(s: Screen) -> None:
     finally:
         conn.close()
 
-    with ui.row().classes("items-center gap-6"):
-        search = ui.input("Filter the list").props("clearable dense").classes("w-80")
-        show_flagged = ui.checkbox(s.flag.show_caption) if s.flag else None
-    columns = [{"name": c, "label": "No." if c == s.key else label(c), "field": c, "align": "left", "sortable": True}
-               for c in s.columns]
-    grid = ui.table(columns=columns, rows=[], row_key=s.key, selection="single", pagination=12).props("dense").mark("list")
-    grid.classes("w-full").bind_filter_from(search, "value")
-
+    # Layout (owner): the buttons, then the form, then the list.
     state = {"id": None, "stored": {}, "unshown": set()}
     with ui.card().classes("w-full"):
         panel_title = ui.label("").classes("text-lg font-bold")
-        flag_text = ui.label("").classes("font-bold text-warning")
-        inputs = {}
-        with ui.grid(columns=2).classes("w-full gap-x-6"):
-            for f in s.fields:
-                inputs[f.name] = make_input(f, suggestions[f.name])
-        problems = ui.label("").classes("text-negative")
         with ui.row().classes("items-center"):
             save_button = ui.button("Save").props("no-caps").mark("save")
             ui.button(f"New {s.noun}", on_click=lambda: new_row()).props("no-caps flat")
@@ -168,7 +155,21 @@ def master_screen(s: Screen) -> None:
             flag_button = ui.button("").props("no-caps flat color=negative").mark("flag") if s.flag else None
             if s.no_delete_text:
                 ui.label(s.no_delete_text).classes("text-sm opacity-70")
+        problems = ui.label("").classes("text-negative")
+        flag_text = ui.label("").classes("font-bold text-warning")
+        inputs = {}
+        with ui.grid(columns=2).classes("w-full gap-x-6"):
+            for f in s.fields:
+                inputs[f.name] = make_input(f, suggestions[f.name])
     show_extra = s.extra() if s.extra else None
+
+    with ui.row().classes("items-center gap-6"):
+        search = ui.input("Filter the list").props("clearable dense").classes("w-80")
+        show_flagged = ui.checkbox(s.flag.show_caption) if s.flag else None
+    columns = [{"name": c, "label": "No." if c == s.key else label(c), "field": c, "align": "left", "sortable": True}
+               for c in s.columns]
+    grid = ui.table(columns=columns, rows=[], row_key=s.key, selection="single", pagination=12).props("dense").mark("list")
+    grid.classes("w-full").bind_filter_from(search, "value")
     watch_marks(inputs)
 
     def flagged_rows(rows):

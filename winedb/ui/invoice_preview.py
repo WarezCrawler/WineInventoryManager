@@ -72,6 +72,11 @@ def invoice_preview_page(invoice_id: int):
         ui.label("Hide subtotals is on: the PDF shows no unit prices and no line totals, only the invoice totals.") \
             .classes("text-orange")
 
+    with ui.row():                           # layout (owner): the buttons above the document
+        create_button = ui.button("Create PDF").props("no-caps")
+        ui.button("Invoice lines", on_click=lambda: ui.navigate.to(f"/invoice/{invoice_id}/lines")).props("no-caps flat")
+    status = ui.label("")
+
     with ui.card().classes("w-full max-w-5xl"):
         with ui.row().classes("w-full justify-between"):
             with ui.column().classes("gap-0"):
@@ -114,8 +119,6 @@ def invoice_preview_page(invoice_id: int):
         for text in doc["texts"]:
             ui.label(text).classes("w-full text-center text-sm opacity-70")
 
-    status = ui.label("")
-
     async def create_pdf() -> None:
         current, current_settings, why = _document(invoice_id)   # the data as it is now
         if current is None:
@@ -147,6 +150,4 @@ def invoice_preview_page(invoice_id: int):
         status.text = f"The PDF is saved: {target}"
         open_file(target)
 
-    with ui.row():
-        ui.button("Create PDF", on_click=create_pdf).props("no-caps")
-        ui.button("Invoice lines", on_click=lambda: ui.navigate.to(f"/invoice/{invoice_id}/lines")).props("no-caps flat")
+    create_button.on_click(create_pdf)
