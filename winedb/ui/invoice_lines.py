@@ -3,6 +3,8 @@
 A grid of the invoice's lines with the totals, and below it the entry panel for one line (new or selected),
 as the Access split form. The amounts are calculated with logic.line_amounts(), the formula that
 invoices.save_line() stores."""
+import logging
+
 from nicegui import ui
 
 from winedb.db import connect
@@ -13,6 +15,12 @@ from winedb.masterdata import list_warehouses
 from winedb.stock import on_hand
 from winedb.ui.labels import label
 from winedb.validation import ValidationError
+
+log = logging.getLogger(__name__)
+
+# The entry field that a problem from invoices.save_line() is about, found by the words of its message.
+PROBLEM_FIELDS = (("wine", "wine"), ("warehouse", "warehouse"), ("quantity", "quantity"), ("sales price", "price"),
+                  ("vat rate", "vat"), ("discount", "discount"), ("cost price", "cost"))
 
 GRID_COLUMNS = ("sales_line_id", "wine", "warehouse_name", "quantity", "sales_price", "discount", "price_type",
                 "vat_percent", "amount_ex_vat", "amount_incl_vat", "line_status")
@@ -53,7 +61,7 @@ def invoice_lines_page(invoice_id: int):
     with ui.header().classes("items-center"):
         ui.label(f"Invoice {invoice_id} – lines").classes("text-xl font-bold")
         ui.space()
-        ui.link("Invoice details", f"/invoice/{invoice_id}").classes("text-white")
+        ui.link("Invoice", f"/invoice/{invoice_id}").classes("text-white")
         ui.link("Invoice preview", f"/invoice/{invoice_id}/preview").classes("text-white")
         ui.link("Main menu", "/").classes("text-white")
     if header is None:
@@ -105,6 +113,29 @@ def invoice_lines_page(invoice_id: int):
             close_button = ui.button("Close invoice").props("no-caps outline")
 
     fields = (wine, warehouse, quantity, comment, price_pick, price, vat, discount, cost_pick, cost)
+    inputs = {"wine": wine, "warehouse": warehouse, "quantity": quantity, "price": price, "vat": vat,
+              "discount": discount, "cost": cost}
+
+    def clear_field(element) -> None:
+        element.props.pop("error", None)
+        element.props.pop("error-message", None)
+
+    def clear_problems() -> None:
+        problems.text = ""
+        for element in inputs.values():
+            clear_field(element)
+
+    def show_problems(messages: list[str], what: str = "The line is not saved") -> None:
+        """Show why an action failed: in red above the buttons, in red at each field concerned, and in a pop-up,
+        because the panel can be below the visible part of the window."""
+        clear_problems()
+        for message in messages:
+            name = next((n for word, n in PROBLEM_FIELDS if word in message.lower()), None)
+            if name:
+                inputs[name].props["error"] = True
+                inputs[name].props["error-message"] = message
+        problems.text = " ".join(messages)
+        ui.notify(f"{what}: {problems.text}", type="negative", multi_line=True)
     if closed:
         for element in (*fields, save, new, undo, cancel_button, close_button):
             element.disable()
@@ -167,7 +198,7 @@ def invoice_lines_page(invoice_id: int):
         panel_title.text = "New line"
         load_price_lists(None)
         set_values({"warehouse_id": header["warehouse_id"], "discount": 0})
-        problems.text = ""
+        clear_problems()
         cancel_button.disable()
 
     def load_line(line_id: int) -> None:
@@ -183,7 +214,7 @@ def invoice_lines_page(invoice_id: int):
         panel_title.text = f"Line {line_id}" + (" (cancelled, read-only)" if stored["is_deleted"] else "")
         load_price_lists(stored["item_id"])
         set_values(stored)
-        problems.text = ""
+        clear_problems()
         if not closed:
             for element in (*fields, save, cancel_button):
                 element.set_enabled(not stored["is_deleted"])
@@ -233,7 +264,11 @@ def invoice_lines_page(invoice_id: int):
         try:
             line_id = save_line(conn, invoice_id, values(), state["line_id"])
         except ValidationError as e:
-            problems.text = " ".join(e.problems)
+            show_problems(e.problems)
+            return
+        except Exception as e:  # noqa: BLE001  (never fail without a message)
+            log.exception("Saving a line of invoice %s failed", invoice_id)
+            show_problems([f"Unexpected error: {e}"])
             return
         finally:
             conn.close()
@@ -254,7 +289,7 @@ def invoice_lines_page(invoice_id: int):
         try:
             cancel_line(conn, invoice_id, line_id)
         except ValidationError as e:
-            problems.text = " ".join(e.problems)
+            show_problems(e.problems, "The line is not cancelled")
             return
         finally:
             conn.close()
@@ -274,7 +309,7 @@ def invoice_lines_page(invoice_id: int):
         try:
             close(conn, invoice_id)
         except ValidationError as e:
-            problems.text = " ".join(e.problems)
+            show_problems(e.problems, "The invoice is not closed")
             return
         finally:
             conn.close()
@@ -288,6 +323,8 @@ def invoice_lines_page(invoice_id: int):
     wine.on_value_change(on_wine)
     for element in (warehouse, quantity, vat, discount, cost):
         element.on_value_change(lambda _: None if state["setting"] else show_live())
+    for element in inputs.values():                      # a changed field loses its red mark
+        element.on_value_change(lambda _, element=element: clear_field(element))
     price_pick.on_value_change(on_price_pick)
     price.on_value_change(on_price_typed)
     cost_pick.on_value_change(on_cost_pick)
