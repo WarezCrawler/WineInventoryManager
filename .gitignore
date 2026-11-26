@@ -19,6 +19,8 @@ settings.json
 *.sql.gz
 *.dump
 *.pdf
+# The company logo (next to the program; the repo is public)
+logo.png
 
 # Editors / OS
 .vscode/*
