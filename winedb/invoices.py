@@ -11,7 +11,9 @@ def open_invoices(conn: sqlite3.Connection) -> list[dict]:
     """Return the open invoices for the main menu, newest first (design doc §6.1).
 
     An invoice is open when `is_closed` is not 1. Each row has `invoice_id`, `customer_id`,
-    `customer_name` and `is_deleted`.
+    `customer_name` and `is_deleted`, and an overview of its lines: `total_quantity` (the sum of the
+    quantities; a return counts as minus), `wine_count` (the number of different wines) and
+    `amount_ex_vat` (the invoice total without VAT). Cancelled lines are left out, as in totals().
 
     The join to the customers is a left join (decision 2 in §10), so an invoice without a valid
     customer is in the list too; its `customer_name` is None. Access used an inner join and hid these
@@ -19,12 +21,18 @@ def open_invoices(conn: sqlite3.Connection) -> list[dict]:
     them and remove the flag.
     """
     rows = conn.execute(
-        "SELECT h.invoice_id, h.customer_id, c.customer_name, COALESCE(h.is_deleted, 0) AS is_deleted"
+        "SELECT h.invoice_id, h.customer_id, c.customer_name, COALESCE(h.is_deleted, 0) AS is_deleted,"
+        " COALESCE(l.total_quantity, 0) AS total_quantity, COALESCE(l.wine_count, 0) AS wine_count,"
+        " COALESCE(l.amount_ex_vat, 0) AS amount_ex_vat"
         " FROM invoice_header AS h LEFT JOIN customers AS c ON c.customer_id = h.customer_id"
+        " LEFT JOIN (SELECT invoice_id, SUM(COALESCE(quantity, 0)) AS total_quantity,"
+        "            COUNT(DISTINCT item_id) AS wine_count, SUM(COALESCE(amount_ex_vat, 0)) AS amount_ex_vat"
+        "            FROM invoice_lines WHERE COALESCE(is_deleted, 0) = 0 GROUP BY invoice_id) AS l"
+        "   ON l.invoice_id = h.invoice_id"
         " WHERE COALESCE(h.is_closed, 0) <> 1"
         " ORDER BY h.invoice_id DESC"
     )
-    return [dict(r) for r in rows]
+    return [{**dict(r), "amount_ex_vat": round(r["amount_ex_vat"], 2)} for r in rows]
 
 
 # --- Invoice header (design doc §5.4, §6.3; step 7) ---

@@ -69,6 +69,9 @@ async def test_menu_lists_open_invoices_in_english(screen: User):
     await screen.open("/")
     await screen.should_see("Wine Inventory Manager")
     table = screen.find(ui.table).elements.pop()   # table cells are rows, not text that should_see finds
+    assert [c["label"] for c in table.columns] == ["Invoice no.", "Customer no.", "Customer name", "Bottles", "Wines",
+                                                   "Total excl. VAT", "Deleted"]
+    assert [(r["total_quantity"], r["wine_count"], r["amount_ex_vat"]) for r in table.rows if r["invoice_id"] == 1] == [(2, 1, 160)]
     assert [(r["invoice_id"], r["customer_name"], r["is_deleted"]) for r in table.rows] == [
         (4, "Æble Ørsted", "Yes"),      # newest first; data stays as it is
         (3, "(no customer)", ""),       # customer 0
@@ -733,5 +736,5 @@ async def test_menu_groups_in_order_with_the_buttons_in_them(screen: User):
             if isinstance(e, ui.button) or e.text in groups]
     headings = [i for i, (kind, _) in enumerate(menu) if kind == "group"]
     assert [menu[i][1] for i in headings] == list(groups)
-    assert [menu[i + 1][1] for i in headings] == ["Open invoice lines", "Stock change", "Sales price list", "Wine list",
+    assert [menu[i + 1][1] for i in headings] == ["Invoice", "Stock change", "Sales price list", "Wine list",
                                                   "Customer list"]

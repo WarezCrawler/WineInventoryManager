@@ -7,7 +7,7 @@ Rows are never deleted. A delete function is a soft delete (a flag): an invoice,
 Status: **Done** = built, **v1** = planned for the first release, **Later** = backlog (after v1).
 
 ## 1. Main menu (§6.1)
-- 1.1 List of open invoices (newest first) with invoice no., customer no. and customer name; invoices without a customer show "(no customer)", and soft-deleted invoices are marked: **Done**
+- 1.1 List of open invoices (newest first) with invoice no., customer no., customer name, bottles, number of wines and total excl. VAT; invoices without a customer show "(no customer)", and soft-deleted invoices are marked: **Done**
 - 1.2 Open invoice lines for the selected invoice: **Done**
 - 1.3 Open invoice header for the selected invoice, or create a new one: **Done**
 - 1.4 Open stock adjustment: **v1**

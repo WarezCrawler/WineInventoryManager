@@ -53,6 +53,15 @@ def menu_page():
             ui.label("Open invoices").classes("text-lg font-bold")
             columns = [{"name": c, "label": label(c), "field": c, "align": "left", "sortable": True}
                        for c in ("invoice_id", "customer_id", "customer_name", "is_deleted")]
+            # The overview of the lines (cancelled lines left out). The numbers stay numbers, so they sort.
+            columns[3:3] = [
+                {"name": "total_quantity", "label": label("total_quantity"), "field": "total_quantity", "align": "right",
+                 "sortable": True},
+                {"name": "wine_count", "label": label("wine_count"), "field": "wine_count", "align": "right", "sortable": True},
+                {"name": "amount_ex_vat", "label": label("invoice_total_ex_vat"), "field": "amount_ex_vat", "align": "right",
+                 "sortable": True,
+                 ":format": "value => value.toLocaleString('en-GB', {minimumFractionDigits: 2, maximumFractionDigits: 2})"},
+            ]
             table = ui.table(columns=columns, rows=_rows(), row_key="invoice_id", selection="single", pagination=20)
             table.classes("w-full").props("dense")
 
@@ -68,9 +77,9 @@ def menu_page():
                 ui.navigate.to(f"/invoice/{inv['invoice_id']}" if inv else "/invoice/new")
 
             group("Invoice")
-            lines_button = ui.button("Open invoice lines", on_click=open_lines).props("no-caps dense").classes("w-full")
             ui.button("Invoice", on_click=open_header).props("no-caps dense").classes("w-full").mark("invoice").tooltip(
                 "The details of the selected invoice. With no invoice selected: a new invoice.")
+            lines_button = ui.button("Open invoice lines", on_click=open_lines).props("no-caps dense").classes("w-full")
             invoice_button = ui.button("Generate invoice", on_click=lambda: ui.navigate.to(
                 f"/invoice/{selected()['invoice_id']}/preview")).props("no-caps dense").classes("w-full").tooltip(
                 "Preview the selected invoice and create its PDF")
