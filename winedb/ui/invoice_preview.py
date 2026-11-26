@@ -59,8 +59,8 @@ def invoice_preview_page(invoice_id: int):
     with ui.header().classes("items-center"):
         ui.label(f"Invoice {invoice_id} – preview").classes("text-xl font-bold")
         ui.space()
-        ui.link("Invoice lines", f"/invoice/{invoice_id}/lines").classes("text-white")
-        ui.link("Main menu", "/").classes("text-white")
+        ui.link("Invoice lines", f"/invoice/{invoice_id}/lines")
+        ui.link("Main menu", "/")
     if doc is None:
         ui.label(problem).classes("text-negative")
         return

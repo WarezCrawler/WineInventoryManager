@@ -49,7 +49,7 @@ def _invoice_page(invoice_id: int | None) -> None:
     with ui.header().classes("items-center"):
         ui.label(title).classes("text-xl font-bold")
         ui.space()
-        ui.link("Main menu", "/").classes("text-white")
+        ui.link("Main menu", "/")
     if invoice_id is not None and header is None:
         ui.label(f"Invoice {invoice_id} does not exist.").classes("text-negative")
         return

@@ -136,7 +136,7 @@ def master_screen(s: Screen) -> None:
     with ui.header().classes("items-center"):
         ui.label(s.title).classes("text-xl font-bold")
         ui.space()
-        ui.link("Main menu", "/").classes("text-white")
+        ui.link("Main menu", "/")
 
     conn = connect()
     try:

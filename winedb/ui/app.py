@@ -10,6 +10,7 @@ from winedb.browse import table_counts, table_view
 from winedb.config import app_dir, db_path
 from winedb.db import connect
 from winedb.settings import move_old_files
+from winedb.ui.theme import apply_theme
 from winedb.ui import (closed_invoices, invoice_header, invoice_lines, invoice_preview, master_screens, menu,  # noqa: F401
                        stock_change, stock_mass)  # noqa: F401  (register the pages)
 
@@ -86,7 +87,7 @@ def table_page(name: str | None = None):
         ui.label("Wine Inventory Manager").classes("text-lg font-bold")
         ui.label(str(db_path())).classes("text-xs opacity-70")
         ui.space()
-        ui.link("Main menu", "/").classes("text-white")
+        ui.link("Main menu", "/")
 
     with ui.left_drawer().classes("bg-slate-100"):
         ui.label("Tables").classes("font-bold")
@@ -130,6 +131,7 @@ def main(argv: list[str] | None = None) -> None:
     except Exception as e:
         _fail(f"Could not open the database:\n{db_path()}\n\n{e}")
         raise SystemExit(1)
+    apply_theme()          # the colour of the heading bar from settings.json
     window = args.mode == "window"
     ui.run(host="127.0.0.1", port=None if window else args.port, title="Wine Inventory Manager", reload=False,
            native=window, window_size=(1280, 800) if window else None, show=args.mode == "browser")

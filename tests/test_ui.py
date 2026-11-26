@@ -723,3 +723,15 @@ async def test_open_invoice_has_no_reopen_button(screen: User):
     await screen.open("/invoice/1")
     await screen.should_see("Close invoice")
     await screen.should_not_see(kind=ui.button, content="Reopen invoice")
+
+
+async def test_menu_groups_in_order_with_the_buttons_in_them(screen: User):
+    await screen.open("/")
+    groups = ("Invoice", "Stock", "Prices", "Master data maintenance", "Reports")
+    items = sorted(screen.find(ui.label).elements | screen.find(ui.button).elements, key=lambda e: e.id)  # creation order
+    menu = [("group" if isinstance(e, ui.label) else "button", e.text) for e in items
+            if isinstance(e, ui.button) or e.text in groups]
+    headings = [i for i, (kind, _) in enumerate(menu) if kind == "group"]
+    assert [menu[i][1] for i in headings] == list(groups)
+    assert [menu[i + 1][1] for i in headings] == ["Open invoice lines", "Stock change", "Sales price list", "Wine list",
+                                                  "Customer list"]

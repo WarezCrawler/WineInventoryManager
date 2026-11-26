@@ -9,15 +9,19 @@ Keys:
                                                                  Access tSettings entries)
   invoice_pdf_folder   folder where invoice PDFs are saved; empty = the folder "invoices" in the data folder
   logo_file            the company logo, a .png or .svg file; a name alone is looked up in the data folder
+  header_colour        the background colour of the heading bar on every screen, as #RRGGBB or #RGB (for
+                       example the background of the logo); empty = the standard blue. Read at start.
 """
 import json
 import os
+import re
 import shutil
 from pathlib import Path
 
 from winedb.config import app_dir, data_dir
 
-KEYS = ("invoice_address", "invoice_bank_details", "invoice_payment_terms", "invoice_pdf_folder", "logo_file")
+KEYS = ("invoice_address", "invoice_bank_details", "invoice_payment_terms", "invoice_pdf_folder", "logo_file",
+        "header_colour")
 LOGO_TYPES = (".png", ".svg")
 
 
@@ -66,6 +70,19 @@ def logo_path(settings: dict) -> Path | None:
     if not path.is_absolute():
         path = data_dir() / path
     return path if path.suffix.lower() in LOGO_TYPES and path.is_file() else None
+
+
+def header_colours(settings: dict) -> tuple[str, str] | None:
+    """(background, text) of the heading bar from the setting `header_colour`, or None for the standard colours
+    (not set, or not a colour in the form #RRGGBB or #RGB). The text is dark on a light background and white
+    on a dark one, so it can always be read."""
+    value = (settings.get("header_colour") or "").strip()
+    if not re.fullmatch(r"#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})", value):
+        return None
+    digits = value[1:] if len(value) == 7 else "".join(c * 2 for c in value[1:])
+    red, green, blue = (int(digits[i:i + 2], 16) for i in (0, 2, 4))
+    light = 0.299 * red + 0.587 * green + 0.114 * blue > 150          # perceived brightness, 0 to 255
+    return f"#{digits.upper()}", ("#333333" if light else "#FFFFFF")
 
 
 def move_old_files() -> list[str]:

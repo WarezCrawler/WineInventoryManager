@@ -78,3 +78,21 @@ def test_the_move_never_overwrites_a_file_in_the_data_folder(monkeypatch, tmp_pa
     assert load_settings(program / "data" / "settings.json")["invoice_address"] == "new"
     assert (program / "settings.json").exists()                                 # left where it is
     assert load_settings(program / "data" / "settings.json")["logo_file"] == "mine.svg"   # a set logo stays
+
+
+def test_header_colour_with_readable_text():
+    from winedb.settings import header_colours
+    assert header_colours({"header_colour": "#ffffff"}) == ("#FFFFFF", "#333333")     # the logo background: dark text
+    assert header_colours({"header_colour": " #1a3 "}) == ("#11AA33", "#FFFFFF")      # dark green: white text
+    assert header_colours({"header_colour": "#5898D4"}) == ("#5898D4", "#FFFFFF")
+    for value in ("", "white", "#12345", "123456", None):
+        assert header_colours({"header_colour": value}) is None                       # the standard colours
+    assert header_colours({}) is None
+
+
+def test_header_css_is_for_every_screen_and_empty_without_a_colour():
+    from winedb.ui.theme import header_css
+    css = header_css({"header_colour": "#FFFFFF"})
+    assert ".q-header { background-color: #FFFFFF !important; color: #333333 !important;" in css
+    assert ".q-header a { color: inherit; }" in css                    # the links in the bar take its text colour
+    assert header_css({"header_colour": ""}) == ".q-header a { color: inherit; }\n"   # standard colours

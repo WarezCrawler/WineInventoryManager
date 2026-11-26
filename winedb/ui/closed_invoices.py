@@ -20,7 +20,7 @@ def closed_invoices_page():
     with ui.header().classes("items-center"):
         ui.label("Closed invoices").classes("text-xl font-bold")
         ui.space()
-        ui.link("Main menu", "/").classes("text-white")
+        ui.link("Main menu", "/")
 
     ui.label("Pick an invoice and open it. Its Invoice screen has the button \"Reopen invoice\".").classes("text-sm")
     open_button = ui.button("Open invoice", on_click=lambda: ui.navigate.to(f"/invoice/{table.selected[0]['invoice_id']}"))

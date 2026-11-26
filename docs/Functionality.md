@@ -14,6 +14,7 @@ Status: **Done** = built, **v1** = planned for the first release, **Later** = ba
 - 1.5 Open customer list: **Later**
 - 1.6 Open current stock report: **Later**
 - 1.7 Buttons for the Later functions shown disabled: **Done**
+- 1.9 The menu on the left in groups (Invoice, Stock, Prices, Master data maintenance, Reports), the open invoices on the right: **Done**
 - 1.8 Quit: **Done**
 
 ## 2. Stock adjustment (§6.2, §5.3)
@@ -54,7 +55,7 @@ Status: **Done** = built, **v1** = planned for the first release, **Later** = ba
 - 7.2 Export to Excel: **Later**
 
 ## 8. Settings
-- 8.1 Settings in `settings.json` in the data folder, not in the database: the invoice texts and the PDF save folder (filled by the Access import), and the logo file (`logo_file`, .png or .svg): **Done**
+- 8.1 Settings in `settings.json` in the data folder, not in the database: the invoice texts and the PDF save folder (filled by the Access import), the logo file (`logo_file`, .png or .svg) and the colour of the heading bar (`header_colour`): **Done**
 - 8.3 All user data in one folder (`data\`): the database, the settings, the logo and, by default, the invoice PDFs; the build keeps it, and a backup is a copy of it (decision 20): **Done**
 - 8.2 Screen to view and edit the settings: **Later**
 

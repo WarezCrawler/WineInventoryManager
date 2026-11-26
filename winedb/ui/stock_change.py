@@ -35,8 +35,8 @@ def stock_change_page():
     with ui.header().classes("items-center"):
         ui.label("Stock change").classes("text-xl font-bold")
         ui.space()
-        ui.link("Mass stock registration", "/stock-mass").classes("text-white")
-        ui.link("Main menu", "/").classes("text-white")
+        ui.link("Mass stock registration", "/stock-mass")
+        ui.link("Main menu", "/")
 
     # Layout (owner): the buttons, then the form, then the list.
     with ui.card().classes("w-full"):
