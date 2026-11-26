@@ -22,11 +22,10 @@ Do the run on **copies**. The live Access file and the program's own `data` fold
 ## 2. Start the program on its own test database
 
 1. Close the program if it is open.
-2. Open PowerShell and type these three lines. They start the program with an empty database in `C:\ParallelRun`, so the program's own data is not touched:
+2. Open PowerShell and type these two lines. They start the program with an empty database in `C:\ParallelRun`. That folder is then the program's data folder (with `settings.json`), so the program's own data is not touched:
 
    ```powershell
    $env:WINE_DB_PATH = "C:\ParallelRun\app.db"
-   $env:WINE_SETTINGS_PATH = "C:\ParallelRun\settings.json"
    & "A:\Development\WineInventoryManager\dist\WineInventoryManager\WineInventoryManager.exe"
    ```
 3. In the program, click **Tables**, then **Import from Access database**. Select `C:\ParallelRun\BEFORE.accdb` and click **Import**. The import must end with "The import matches the source".

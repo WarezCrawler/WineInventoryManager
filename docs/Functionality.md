@@ -54,7 +54,8 @@ Status: **Done** = built, **v1** = planned for the first release, **Later** = ba
 - 7.2 Export to Excel: **Later**
 
 ## 8. Settings
-- 8.1 Settings in `settings.json`, not in the database: the invoice texts and the PDF save folder (filled by the Access import): **Done**
+- 8.1 Settings in `settings.json` in the data folder, not in the database: the invoice texts and the PDF save folder (filled by the Access import), and the logo file (`logo_file`, .png or .svg): **Done**
+- 8.3 All user data in one folder (`data\`): the database, the settings, the logo and, by default, the invoice PDFs; the build keeps it, and a backup is a copy of it (decision 20): **Done**
 - 8.2 Screen to view and edit the settings: **Later**
 
 ## 9. Database and migration

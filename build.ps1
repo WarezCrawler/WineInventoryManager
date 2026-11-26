@@ -1,9 +1,11 @@
 # Builds the program: dist\WineInventoryManager\WineInventoryManager.exe
 # Run in PowerShell from anywhere:  .\build.ps1
 #
-# The program keeps its database (data\), settings.json and the company logo (logo.png, optional, never in
-# git) next to the .exe, inside the build folder. PyInstaller deletes that folder at each build, so this
-# script moves them out first and puts them back afterwards, also when the build fails. It refuses to build while the program runs, because the running
+# All user data is in the folder data\ next to the .exe: the database, settings.json, the logo and, by default,
+# the invoice PDFs. Every file in it is protected. PyInstaller deletes the build folder at each build, so this
+# script moves data\ out first and puts it back afterwards, also when the build fails. settings.json and
+# logo.png of earlier versions (next to the .exe) are kept too; the program moves them into data\ at its
+# next start. It refuses to build while the program runs, because the running
 # program locks its files and would create a new, empty database during the build.
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot

@@ -9,6 +9,7 @@ from migrate.import_accdb import import_accdb
 from winedb.browse import table_counts, table_view
 from winedb.config import app_dir, db_path
 from winedb.db import connect
+from winedb.settings import move_old_files
 from winedb.ui import (closed_invoices, invoice_header, invoice_lines, invoice_preview, master_screens, menu,  # noqa: F401
                        stock_change, stock_mass)  # noqa: F401  (register the pages)
 
@@ -124,6 +125,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--port", type=int, default=8080, help="port for browser/server mode")
     args = parser.parse_args(argv)
     try:
+        move_old_files()   # settings.json and logo.png of earlier versions move into the data folder
         connect().close()  # create or upgrade the database before showing anything
     except Exception as e:
         _fail(f"Could not open the database:\n{db_path()}\n\n{e}")

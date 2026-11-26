@@ -9,10 +9,9 @@ import sys
 
 from nicegui import ui
 
-from winedb.config import app_dir
 from winedb.db import connect
 from winedb.invoice_print import invoice_document, padded, pdf_path, short_date, whole, write_pdf
-from winedb.settings import load_settings, settings_path
+from winedb.settings import load_settings, logo_path, settings_path
 from winedb.ui.labels import label
 from winedb.validation import ValidationError
 
@@ -141,9 +140,8 @@ def invoice_preview_page(invoice_id: int):
             if not replace:
                 status.text = "The PDF is not replaced."
                 return
-        logo = app_dir() / "logo.png"
         try:
-            write_pdf(current, target, logo if logo.exists() else None)
+            write_pdf(current, target, logo_path(current_settings))
         except OSError as e:
             status.text = f"Could not save the PDF: {e}. If the PDF is open in a viewer, close it and try again."
             return

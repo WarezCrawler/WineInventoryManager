@@ -1,9 +1,9 @@
 """Main menu (design doc §6.1, replaces the Access form fNavigation). All text is British English."""
 from nicegui import app, ui
 
-from winedb.config import app_dir
 from winedb.db import connect
 from winedb.invoices import open_invoices
+from winedb.settings import load_settings, logo_path
 from winedb.ui.labels import label
 
 NO_CUSTOMER = "(no customer)"
@@ -30,9 +30,12 @@ def _rows() -> list[dict]:
 @ui.page("/")
 def menu_page():
     with ui.header().classes("items-center"):
-        logo = app_dir() / "logo.png"  # optional and not in git: the company logo, next to the program
-        if logo.exists():
-            ui.image(str(logo)).classes("w-12")
+        try:
+            logo = logo_path(load_settings())     # optional and not in git: the setting logo_file (.png or .svg)
+        except ValueError:
+            logo = None                           # a broken settings.json must not stop the main menu
+        if logo:
+            ui.image(logo).props("fit=contain").classes("h-10 w-56 bg-white rounded")
         ui.label("Wine Inventory Manager").classes("text-xl font-bold")
         ui.space()
         ui.link("Tables", "/tables").classes("text-white")
