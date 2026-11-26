@@ -35,7 +35,8 @@ def invoice(tmp_path):
     def add(item, quantity=1, price=125.0, discount=0, vat=0.25):
         return save_line(conn, number, {"item_id": item, "warehouse_id": 1, "quantity": quantity, "sales_price": price,
                                         "vat_rate": vat, "discount": discount, "cost_price": 50})
-    return conn, number, add
+    yield conn, number, add
+    conn.close()
 
 
 def test_access_formats():
@@ -102,12 +103,13 @@ def test_file_name_as_access(invoice):
     assert pdf_file_name({**doc, "customer_name": "/Vin ?Hus"}) == f"F{number}___157_03-05-2014.pdf"   # not allowed in a file name
 
 
-def test_pdf_path_needs_an_existing_folder(invoice, tmp_path):
+def test_pdf_path_is_the_set_folder_or_invoices_in_the_data_folder(invoice, tmp_path, monkeypatch):
     conn, number, _ = invoice
     doc = invoice_document(conn, number, SETTINGS)
-    with pytest.raises(ValidationError, match="No PDF folder"):
-        pdf_path(doc, "")
-    with pytest.raises(ValidationError, match="does not exist"):
+    monkeypatch.setenv("WINE_DB_PATH", str(tmp_path / "data" / "wine.db"))
+    assert pdf_path(doc, "") == tmp_path / "data" / "invoices" / pdf_file_name(doc)    # no setting: all user data in one folder
+    assert (tmp_path / "data" / "invoices").is_dir()
+    with pytest.raises(ValidationError, match="does not exist"):                     # a set folder must exist
         pdf_path(doc, str(tmp_path / "missing"))
     assert pdf_path(doc, f'"{tmp_path}"') == tmp_path / pdf_file_name(doc)
 
@@ -183,3 +185,31 @@ def test_pdf_with_the_company_logo(invoice, tmp_path):
     Image.new("RGBA", (400, 60), (60, 120, 60, 255)).save(logo)
     target = write_pdf(invoice_document(conn, number, SETTINGS), tmp_path / "out.pdf", logo)
     assert b"/Subtype /Image" in target.read_bytes()
+
+
+SVG_LOGO = ('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="60" viewBox="0 0 400 60">'
+            '<rect width="400" height="60" fill="#3c7c3c"/><circle cx="30" cy="30" r="20" fill="#777"/></svg>')
+
+
+def test_pdf_with_an_svg_logo(invoice, tmp_path, monkeypatch):
+    from reportlab.graphics import renderPDF
+    conn, number, add = invoice
+    add(1)
+    logo = tmp_path / "logo.svg"
+    logo.write_text(SVG_LOGO, encoding="utf-8")
+    drawn = []
+    draw = renderPDF.draw
+    monkeypatch.setattr(renderPDF, "draw", lambda d, c, x, y: drawn.append((d.width * d.transform[0], x, y)) or draw(d, c, x, y))
+    target = write_pdf(invoice_document(conn, number, SETTINGS), tmp_path / "out.pdf", logo)
+    assert target.read_bytes().startswith(b"%PDF")
+    [(width, x, _)] = drawn
+    assert width == pytest.approx(min(5400 / 20, 870 / 20 * 400 / 60))   # as large as the logo box allows, the shape kept
+    assert x == pytest.approx((504 + 2664) / 20 + (5400 / 20 - width) / 2)   # centred in the box
+
+
+def test_a_broken_svg_logo_gives_an_invoice_without_a_logo(invoice, tmp_path):
+    conn, number, add = invoice
+    add(1)
+    logo = tmp_path / "logo.svg"
+    logo.write_text("not svg", encoding="utf-8")
+    assert write_pdf(invoice_document(conn, number, SETTINGS), tmp_path / "out.pdf", logo).read_bytes().startswith(b"%PDF")

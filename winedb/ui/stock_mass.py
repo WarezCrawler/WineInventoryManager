@@ -108,8 +108,8 @@ def stock_mass_page():
     with ui.header().classes("items-center"):
         ui.label("Mass stock registration").classes("text-xl font-bold")
         ui.space()
-        ui.link("Stock change", "/stock-change").classes("text-white")
-        ui.link("Main menu", "/").classes("text-white")
+        ui.link("Stock change", "/stock-change")
+        ui.link("Main menu", "/")
 
     ui.label(HELP).classes("text-sm opacity-80")
     with ui.row():

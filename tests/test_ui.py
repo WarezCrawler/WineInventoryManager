@@ -69,6 +69,9 @@ async def test_menu_lists_open_invoices_in_english(screen: User):
     await screen.open("/")
     await screen.should_see("Wine Inventory Manager")
     table = screen.find(ui.table).elements.pop()   # table cells are rows, not text that should_see finds
+    assert [c["label"] for c in table.columns] == ["Invoice no.", "Customer no.", "Customer name", "Bottles", "Wines",
+                                                   "Total excl. VAT", "Deleted"]
+    assert [(r["total_quantity"], r["wine_count"], r["amount_ex_vat"]) for r in table.rows if r["invoice_id"] == 1] == [(2, 1, 160)]
     assert [(r["invoice_id"], r["customer_name"], r["is_deleted"]) for r in table.rows] == [
         (4, "Æble Ørsted", "Yes"),      # newest first; data stays as it is
         (3, "(no customer)", ""),       # customer 0
@@ -571,12 +574,13 @@ async def test_create_pdf_saves_and_opens_it_and_asks_before_replacing(screen: U
     assert pdf.read_bytes().startswith(b"%PDF") and len(opened) == 2
 
 
-async def test_create_pdf_without_a_pdf_folder_says_what_to_do(screen: User, tmp_path, monkeypatch, opened):
+async def test_create_pdf_without_a_pdf_folder_uses_the_data_folder(screen: User, db, tmp_path, monkeypatch, opened):
     monkeypatch.setenv("WINE_SETTINGS_PATH", str(tmp_path / "missing.json"))
     await screen.open("/invoice/1/preview")
     screen.find("Create PDF").click()
-    await screen.should_see("No PDF folder is set.")
-    assert opened == []
+    await screen.should_see("The PDF is saved")
+    [pdf] = opened
+    assert pdf.parent == db.parent / "invoices"                                # all user data in the data folder
 
 
 async def test_preview_of_an_unknown_invoice(screen: User, pdf_folder):
@@ -722,3 +726,15 @@ async def test_open_invoice_has_no_reopen_button(screen: User):
     await screen.open("/invoice/1")
     await screen.should_see("Close invoice")
     await screen.should_not_see(kind=ui.button, content="Reopen invoice")
+
+
+async def test_menu_groups_in_order_with_the_buttons_in_them(screen: User):
+    await screen.open("/")
+    groups = ("Invoice", "Stock", "Prices", "Master data maintenance", "Reports")
+    items = sorted(screen.find(ui.label).elements | screen.find(ui.button).elements, key=lambda e: e.id)  # creation order
+    menu = [("group" if isinstance(e, ui.label) else "button", e.text) for e in items
+            if isinstance(e, ui.button) or e.text in groups]
+    headings = [i for i, (kind, _) in enumerate(menu) if kind == "group"]
+    assert [menu[i][1] for i in headings] == list(groups)
+    assert [menu[i + 1][1] for i in headings] == ["Invoice", "Stock change", "Sales price list", "Wine list",
+                                                  "Customer list"]

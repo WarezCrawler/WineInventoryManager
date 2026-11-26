@@ -39,7 +39,7 @@ Version 1 copies Access, but not exactly. Each difference below is either decide
 | # | Difference | Why | Status |
 |---|---|---|---|
 | 1 | The UI is in British English, not Danish. The data stays as it is. | Your decision | Done |
-| 2 | Settings are in `settings.json`, not in a table. The database and `settings.json` stay next to the program. | Configuration is not business data; owner decision 2026-11-21 | Done |
+| 2 | Settings are in `settings.json`, not in a table. All user data (database, settings, logo, by default the invoice PDFs) is in the `data` folder next to the program. | Configuration is not business data; owner decisions 2026-11-21 and 2026-11-26 | Done |
 | 3 | The open-invoice list also shows invoices without a customer, as "(no customer)". Access hid them. | So these drafts can be finished or deleted | Done (default of decision 2) |
 | 4 | Stock leaves out the lines of soft-deleted invoices. Access counted them. | Your rule: calculations leave out flagged rows. No effect on the current data. | Done |
 | 5 | A new invoice must have a customer. Access allowed customer 0. | Prevents new drafts without a customer | Done |

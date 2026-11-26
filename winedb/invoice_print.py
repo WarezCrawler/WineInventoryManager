@@ -16,6 +16,7 @@ import re
 from datetime import date
 from pathlib import Path
 
+from winedb.config import data_dir
 from winedb.invoices import get_header, lines, totals
 from winedb.validation import ValidationError
 
@@ -142,10 +143,14 @@ def pdf_file_name(doc: dict, today: date | None = None) -> str:
 
 
 def pdf_path(doc: dict, folder: str) -> Path:
-    """Where the PDF goes: the PDF folder from settings.json (`invoice_pdf_folder`). The folder must exist."""
+    """Where the PDF goes: the PDF folder from settings.json (`invoice_pdf_folder`), which must exist. Without
+    that setting, the folder "invoices" in the data folder, which is made when needed (all user data in one
+    folder)."""
     folder = (folder or "").strip().strip('"')
     if not folder:
-        raise ValidationError(["No PDF folder is set. Enter the folder as invoice_pdf_folder in settings.json."])
+        default = data_dir() / "invoices"
+        default.mkdir(parents=True, exist_ok=True)
+        return default / pdf_file_name(doc)
     if not Path(folder).is_dir():
         raise ValidationError([f"The PDF folder does not exist: {folder}. Create it, or change invoice_pdf_folder "
                                "in settings.json."])
@@ -237,6 +242,19 @@ class _Page:
         c.line(self.x(left), self.y(top), self.x(left + width), self.y(top))
 
 
+def _draw_svg(canvas, path, x: float, y: float, width: float, height: float) -> None:
+    """Draw an SVG logo in the box, as large as fits and centred (the PNG logo is placed the same way)."""
+    from reportlab.graphics import renderPDF
+    from svglib.svglib import svg2rlg
+
+    drawing = svg2rlg(str(path))
+    if drawing is None or not drawing.width or not drawing.height:
+        return                                   # not a usable SVG: the invoice is printed without a logo
+    scale = min(width / drawing.width, height / drawing.height)
+    drawing.scale(scale, scale)
+    renderPDF.draw(drawing, canvas, x + (width - drawing.width * scale) / 2, y + (height - drawing.height * scale) / 2)
+
+
 def _comment_lines(text: str, font: str) -> list[str]:
     from reportlab.lib.utils import simpleSplit
 
@@ -245,7 +263,8 @@ def _comment_lines(text: str, font: str) -> list[str]:
 
 def write_pdf(doc: dict, target: Path | str, logo: Path | str | None = None) -> Path:
     """Draw the invoice as a PDF file at `target` (written to a temporary file first, then renamed, so a
-    failed run leaves no half file). `logo` is the optional company logo (logo.png next to the program)."""
+    failed run leaves no half file). `logo` is the optional company logo, a .png or .svg file
+    (settings.logo_path())."""
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.utils import ImageReader
     from reportlab.pdfgen.canvas import Canvas
@@ -283,9 +302,12 @@ def write_pdf(doc: dict, target: Path | str, logo: Path | str | None = None) -> 
 
     # Report header (first page only): the logo
     top = room(REPORT_HEADER_HEIGHT)
-    if logo and Path(logo).exists():
-        canvas.drawImage(ImageReader(str(logo)), page.x(2664), page.y(top + 56 + 870), 5400 / 20, 870 / 20,
-                         preserveAspectRatio=True, anchor="c", mask="auto")
+    if logo and Path(logo).is_file():
+        box = (page.x(2664), page.y(top + 56 + 870), 5400 / 20, 870 / 20)       # x, y, width, height in points
+        if Path(logo).suffix.lower() == ".svg":
+            _draw_svg(canvas, logo, *box)
+        else:
+            canvas.drawImage(ImageReader(str(logo)), *box, preserveAspectRatio=True, anchor="c", mask="auto")
 
     # Invoice header (group header of the customer)
     top = room(INVOICE_HEADER_HEIGHT)

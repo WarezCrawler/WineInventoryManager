@@ -16,3 +16,10 @@ def db_path() -> Path:
     if env:
         return Path(env)
     return app_dir() / "data" / "wine_inventory.db"
+
+
+def data_dir() -> Path:
+    """The folder with all user data: the database, settings.json, the logo and, by default, the invoice PDFs.
+    It is the folder of the database (so WINE_DB_PATH moves all of it). The build keeps it (build.ps1); a
+    backup is a copy of this folder."""
+    return db_path().parent
